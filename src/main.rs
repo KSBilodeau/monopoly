@@ -1,4 +1,6 @@
 use eyre::Result;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 use hyper::{Request, Response};
@@ -18,7 +20,7 @@ async fn handle_connection(mut request: Request<Incoming>) -> Result<Response<Fu
 
         Ok(resp)
     } else {
-        handle_http_request(request)
+        handle_http_request(request).await
     }
 }
 
@@ -27,7 +29,7 @@ async fn handle_websocket(websocket: HyperWebsocket) -> Result<()> {
 
     while let Some(msg) = websocket.next().await {
         match msg? {
-            Message::text(msg) => {
+            Message::Text(msg) => {
                 println!("Received text message: {}", msg);
                 websocket.send(Message::Text(msg)).await?;
             }
@@ -38,7 +40,7 @@ async fn handle_websocket(websocket: HyperWebsocket) -> Result<()> {
     Ok(())
 }
 
-async fn handle_http_request(request: Request<Incoming>) -> Result<Response<Full<Bytes>>> {
+async fn handle_http_request(_: Request<Incoming>) -> Result<Response<Full<Bytes>>> {
     Ok(Response::new(Full::<Bytes>::from("Hello HTTP!")))
 }
 
