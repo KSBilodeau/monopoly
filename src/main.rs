@@ -1,23 +1,69 @@
-use std::net::TcpListener;
 use eyre::Result;
-use tungstenite::accept;
+use http_body_util::Full;
+use hyper::body::{Bytes, Incoming};
+use hyper::{Request, Response};
+use hyper_tungstenite::HyperWebsocket;
+use hyper_util::rt::TokioIo;
+use tungstenite::Message;
 
-fn main() -> Result<()> {
-    let port_str = std::env::var("MONOPOLY_SERVER_PORT")?;
+async fn handle_connection(mut request: Request<Incoming>) -> Result<Response<Full<Bytes>>> {
+    if hyper_tungstenite::is_upgrade_request(&request) {
+        let (resp, websocket) = hyper_tungstenite::upgrade(&mut request, None)?;
 
-    let server = TcpListener::bind(format!("127.0.0.1:{}", port_str))?;
-    for stream in server.incoming() {
-        let mut websocket = accept(stream?)?;
-
-        loop {
-            let msg = websocket.read()?;
-
-            if msg.is_binary() || msg.is_text() {
-                websocket.send(msg)?;
+        tokio::spawn(async move {
+            if let Err(e) = handle_websocket(websocket).await {
+                eprintln!("Error in websocket connection: {}", e);
             }
+        });
+
+        Ok(resp)
+    } else {
+        handle_http_request(request)
+    }
+}
+
+async fn handle_websocket(websocket: HyperWebsocket) -> Result<()> {
+    let mut websocket = websocket.await?;
+
+    while let Some(msg) = websocket.next().await {
+        match msg? {
+            Message::text(msg) => {
+                println!("Received text message: {}", msg);
+                websocket.send(Message::Text(msg)).await?;
+            }
+            _ => unreachable!(),
         }
     }
 
-
     Ok(())
+}
+
+async fn handle_http_request(request: Request<Incoming>) -> Result<Response<Full<Bytes>>> {
+    Ok(Response::new(Full::<Bytes>::from("Hello HTTP!")))
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let port_str = std::env::var("MONOPOLY_SERVER_PORT")?;
+
+    let server = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port_str)).await?;
+    println!("Listening on port {}", port_str);
+
+    let mut http = hyper::server::conn::http1::Builder::new();
+    http.keep_alive(true);
+
+    loop {
+        let (stream, _) = server.accept().await?;
+
+        let connection = http.serve_connection(
+            TokioIo::new(stream),
+            hyper::service::service_fn(handle_connection),
+        );
+
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("Error serving http connection: {:?}", e);
+            }
+        });
+    }
 }
