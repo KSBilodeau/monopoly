@@ -5,7 +5,7 @@ use tungstenite::accept;
 fn main() -> Result<()> {
     let port_str = std::env::var("MONOPOLY_SERVER_PORT")?;
 
-    let server = TcpListener::bind(format!("0.0.0.0:{}", port_str))?;
+    let server = TcpListener::bind(format!("127.0.0.1:{}", port_str))?;
     for stream in server.incoming() {
         let mut websocket = accept(stream?)?;
 
