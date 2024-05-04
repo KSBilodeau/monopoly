@@ -1,3 +1,4 @@
+use std::io::Write;
 use async_std::net;
 use eyre::Result;
 
@@ -23,7 +24,11 @@ async fn main() -> Result<()> {
     let server = listener.try_clone()?;
 
     async_std::task::spawn(async move {
-       for _ in dbg!(server.incoming()) {
+       for stream in dbg!(server.incoming()) {
+           let mut stream = stream.unwrap();
+           let response = "HTTP/1.1 200 OK\r\n\r\n";
+
+           stream.write_all(response.as_bytes()).unwrap();
        }
     });
 
