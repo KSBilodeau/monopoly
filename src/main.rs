@@ -18,11 +18,12 @@ async fn main() -> Result<()> {
     let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_SERVER_PORT")?);
 
     let listener = std::net::TcpListener::bind(&ip_addr)?;
-
-    let server = net::TcpListener::from(listener.try_clone()?);
     println!("Listening on {}", &ip_addr);
 
+    let server = net::TcpListener::from(listener.try_clone()?);
+
     async_std::task::spawn(async move {
+        println!("TASK HAS STARTED AND IS WAITING");
         while let Ok((stream, _)) = dbg!(server.accept().await) {
             let peer = stream.peer_addr().unwrap();
             println!("Peer address: {}", peer);
