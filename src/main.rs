@@ -17,7 +17,9 @@ async fn test(_: tide::Request<()>) -> tide::Result {
 async fn main() -> Result<()> {
     let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_SERVER_PORT")?);
 
-    let server = net::TcpListener::bind(&ip_addr).await?;
+    let listener = std::net::TcpListener::bind(&ip_addr)?;
+
+    let server = net::TcpListener::from(listener.try_clone()?);
     println!("Listening on {}", &ip_addr);
 
     async_std::task::spawn(async move {
@@ -31,7 +33,7 @@ async fn main() -> Result<()> {
 
     http_client.at("/api/test").post(test);
 
-    http_client.listen(&ip_addr).await?;
+    http_client.listen(listener.try_clone()?).await?;
 
     Ok(())
 }
