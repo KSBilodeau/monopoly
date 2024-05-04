@@ -51,12 +51,12 @@ async fn main() -> Result<()> {
     let http = async_std::task::spawn(async move {
         let mut http_client = tide::new();
 
-        http_client.at("/api/test").post(test);
+        http_client.at("/api/test").get(test);
 
+        println!("Listening on http port {}", http_addr);
         let Ok(_) = http_client.listen(http_addr.clone()).await else {
             panic!("HTTP server failed to establish a connection!");
         };
-        println!("Listening on http port {}", http_addr);
     });
 
     websocket.join(http).await;
