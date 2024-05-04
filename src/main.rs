@@ -22,10 +22,6 @@ async fn serve_websocket(peer: net::SocketAddr, stream: net::TcpStream) -> Resul
     Ok(())
 }
 
-async fn _serve_request() -> Result<()> {
-    Ok(())
-}
-
 async fn test(_: tide::Request<()>) -> tide::Result {
     Ok("Hello, World!".into())
 }
