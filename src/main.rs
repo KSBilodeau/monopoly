@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     println!("Listening on {}", &ip_addr);
 
     async_std::task::spawn(async move {
-        while let Ok((stream, _)) = server.accept().await {
+        while let Ok((stream, _)) = dbg!(server.accept().await) {
             let peer = stream.peer_addr().unwrap();
             println!("Peer address: {}", peer);
         }
@@ -34,6 +34,5 @@ async fn main() -> Result<()> {
     http_client.at("/api/test").post(test);
 
     http_client.listen(listener.try_clone()?).await?;
-
     Ok(())
 }
