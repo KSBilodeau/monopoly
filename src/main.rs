@@ -8,7 +8,7 @@ async fn serve_websocket(peer: net::SocketAddr, stream: net::TcpStream) -> Resul
     let mut ws_stream = accept_async(stream).await?;
     println!("New WS connection at {}", peer);
 
-    while let Some(msg) = ws_stream.next().await {
+    while let Some(msg) = dbg!(ws_stream.next().await) {
         let msg = match msg {
             Ok(msg) => msg,
             Err(e) => return Err(e.into()),
