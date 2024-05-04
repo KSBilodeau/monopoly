@@ -14,7 +14,7 @@ async fn serve_websocket(peer: net::SocketAddr, stream: net::TcpStream) -> Resul
             Err(e) => return Err(e.into()),
         };
 
-        if msg.is_text() && msg.is_binary() {
+        if msg.is_text() || msg.is_binary() {
             ws_stream.send(msg).await?;
         }
     }
