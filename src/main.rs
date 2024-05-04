@@ -20,11 +20,18 @@ async fn main() -> Result<()> {
     let listener = std::net::TcpListener::bind(&ip_addr)?;
     println!("Listening on {}", &ip_addr);
 
-    let server = net::TcpListener::from(listener.try_clone()?);
+    let server = listener.try_clone()?;
+
+    async_std::task::spawn(async move {
+       for _ in dbg!(server.incoming()) {
+       }
+    });
+
+    let async_server = net::TcpListener::from(listener.try_clone()?);
 
     async_std::task::spawn(async move {
         println!("TASK HAS STARTED AND IS WAITING");
-        while let Ok((stream, _)) = dbg!(server.accept().await) {
+        while let Ok((stream, _)) = dbg!(async_server.accept().await) {
             let peer = stream.peer_addr().unwrap();
             println!("Peer address: {}", peer);
         }
