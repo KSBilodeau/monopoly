@@ -24,8 +24,8 @@ async fn main() -> Result<()> {
     let server = listener.try_clone()?;
 
     async_std::task::spawn(async move {
-       for stream in dbg!(server.incoming()) {
-           let mut stream = stream.unwrap();
+       for Ok(stream) in dbg!(server.incoming()) {
+           let mut stream = stream;
            let response = "HTTP/1.1 200 OK\r\n\r\n";
 
            stream.write_all(response.as_bytes()).unwrap();
