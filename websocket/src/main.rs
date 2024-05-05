@@ -37,6 +37,8 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    simple_logger::SimpleLogger::new().init()?;
+
     async_std::task::block_on(async move {
         let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_WS_PORT")?);
 
