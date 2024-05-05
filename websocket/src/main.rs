@@ -8,6 +8,8 @@ fn main() -> Result<()> {
         let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_WS_PORT")?);
         let server = TcpListener::bind(ip_addr).await?;
 
+        let mut data = Vec::new();
+
         while let Ok((stream, _)) = server.accept().await {
             let mut server = Server::new(stream);
 
@@ -21,7 +23,6 @@ fn main() -> Result<()> {
 
             let (mut sender, mut receiver) = server.into_builder().finish();
 
-            let mut data = Vec::new();
             let data_type = receiver.receive_data(&mut data).await?;
 
             if data_type.is_text() {
@@ -29,6 +30,7 @@ fn main() -> Result<()> {
             }
 
             sender.close().await?;
+            data.clear();
         }
 
         Ok(())
