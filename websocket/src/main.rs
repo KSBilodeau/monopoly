@@ -5,7 +5,7 @@ use soketto::handshake::server::Response;
 
 fn main() -> Result<()> {
     async_std::task::block_on(async move {
-        let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_HTTP_PORT")?);
+        let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_WS_PORT")?);
         let server = TcpListener::bind(ip_addr).await?;
 
         while let Ok((stream, _)) = server.accept().await {
