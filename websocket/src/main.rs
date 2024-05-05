@@ -28,7 +28,7 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
         let data_type = receiver.receive_data(&mut data).await?;
 
         if data_type.is_text() {
-            info!("Received data frame: {:?} {}", data_type, std::str::from_utf8(&data)?);
+            info!("Received data frame: {:?} \"{}\"", data_type, std::str::from_utf8(&data)?);
             sender.send_text(std::str::from_utf8(&data)?).await?;
         }
 
