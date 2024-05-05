@@ -26,9 +26,9 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
 
     loop {
         let data_type = receiver.receive_data(&mut data).await?;
-        info!("Received data frame: {:#?}", data_type);
 
         if data_type.is_text() {
+            info!("Received data frame: {:?} {}", data_type, std::str::from_utf8(&data)?);
             sender.send_text(std::str::from_utf8(&data)?).await?;
         }
 
@@ -37,7 +37,7 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    simple_logger::SimpleLogger::new().init()?;
+    simple_logger::SimpleLogger::new().with_level(LevelFilter::Debug).init()?;
 
     async_std::task::block_on(async move {
         let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_WS_PORT")?);
