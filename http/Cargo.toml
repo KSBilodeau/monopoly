@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tide = "0.16.0"
+tide = { version = "0.16.0", default-features = false, features = ["default"]}
