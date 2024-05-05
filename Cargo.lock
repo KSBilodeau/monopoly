@@ -965,6 +965,9 @@ dependencies = [
 name = "http"
 version = "0.1.0"
 dependencies = [
+ "eyre",
+ "log",
+ "simple_logger",
  "tide",
 ]
 

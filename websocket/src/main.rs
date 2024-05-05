@@ -13,7 +13,7 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
 
     let websocket_key = {
         let req = server.receive_request().await?;
-        info!("Received request for path: {}", req.path());
+        info!("[{}] Received request for path: {}", addr, req.path());
         req.key()
     };
 
@@ -28,12 +28,22 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
         let data_type = receiver.receive_data(&mut data).await?;
 
         if data_type.is_text() {
-            info!("Received data frame: {:?} \"{}\"", data_type, std::str::from_utf8(&data)?);
-            sender.send_text(std::str::from_utf8(&data)?).await?;
+            let data = std::str::from_utf8(&data)?;
+
+            info!("[{}] Received data frame: {:?} \"{}\"", addr, data_type, data);
+
+            let resp = handle_data(data).await?;
+            sender.send_text(resp).await?;
+
+            info!("[{}] Responded with: \"{}\"", addr, resp);
         }
 
         data.clear();
     }
+}
+
+async fn handle_data(data: &str) -> Result<&str> {
+    Ok(data)
 }
 
 fn main() -> Result<()> {
