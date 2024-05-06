@@ -50,6 +50,7 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
             Err(e) => {
                 sender.send_text(format!("{}", e)).await?;
                 sender.close().await?;
+                info!("Closed connection on {}", addr);
                 return Ok(());
             }
         }
