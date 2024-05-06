@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 
 use async_std::net::{TcpListener, TcpStream};
 use async_std::sync::Mutex;
-use eyre::private::new_adhoc;
 use eyre::Result;
 use log::*;
 use soketto::handshake::Server;
@@ -43,7 +42,9 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
 
         let mut request = data.lines();
         if let Err(e) = handle_init(&mut request).await {
-            return Ok(format!("{}", e))
+            sender.send_text(format!("{}", e)).await?;
+            sender.close().await?;
+            return Ok(());
         }
     }
 
