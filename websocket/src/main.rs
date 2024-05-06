@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use async_std::net::{TcpListener, TcpStream};
 use async_std::sync::Mutex;
+use eyre::private::new_adhoc;
 use eyre::Result;
 use log::*;
 use soketto::handshake::Server;
@@ -35,6 +36,17 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
     let (mut sender, mut receiver) = server.into_builder().finish();
 
     let mut data = Vec::new();
+
+    {
+        receiver.receive_data(&mut data).await?;
+        let data = std::str::from_utf8(&data)?;
+
+        let mut request = data.lines();
+        if let Err(e) = handle_init(&mut request).await {
+            return Ok(format!("{}", e))
+        }
+    }
+
     loop {
         let data_type = receiver.receive_data(&mut data).await?;
 
@@ -62,16 +74,19 @@ async fn handle_data(data: &str) -> Result<String> {
     let mut request = data.lines();
 
     let Some(req_type) = request.next() else {
-        return Ok("INVALID REQUEST TYPE".into());
+        return Ok("INVALID COMMAND".into());
     };
 
     match req_type {
-        "INIT" => handle_init(&mut request).await,
         _ => Ok("INVALID REQUEST TYPE".into()),
     }
 }
 
 async fn handle_init(request: &mut core::str::Lines<'_>) -> Result<String> {
+    if request.next() != Some("INIT") {
+        eyre::bail!("FIRST MSG SENT MUST BE INIT COMMAND");
+    }
+
     let num_args = request.clone().count();
 
     if num_args < 1 {
