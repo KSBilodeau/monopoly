@@ -50,6 +50,7 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
             Err(e) => {
                 sender.send_text(format!("{}", e)).await?;
                 sender.close().await?;
+                info!("Received incorrect init procedure on {}", addr);
                 info!("Closed connection on {}", addr);
                 return Ok(());
             }
@@ -92,7 +93,6 @@ async fn handle_data(data: &str) -> Result<String> {
 }
 
 async fn handle_init(request: &mut core::str::Lines<'_>) -> Result<String> {
-    info!("HANDLING INIT");
     if request.next() != Some("INIT") {
         eyre::bail!("FIRST MSG SENT MUST BE INIT COMMAND");
     }
