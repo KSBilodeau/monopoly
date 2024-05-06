@@ -37,6 +37,7 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
     let mut data = Vec::new();
 
     {
+        info!("WAITING FOR INIT");
         receiver.receive_data(&mut data).await?;
         let data = std::str::from_utf8(&data)?;
 
@@ -47,6 +48,8 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
             return Ok(());
         }
     }
+
+    info!("INIT COMPLETE");
 
     loop {
         let data_type = receiver.receive_data(&mut data).await?;
@@ -84,6 +87,7 @@ async fn handle_data(data: &str) -> Result<String> {
 }
 
 async fn handle_init(request: &mut core::str::Lines<'_>) -> Result<String> {
+    info!("HANDLING INIT");
     if request.next() != Some("INIT") {
         eyre::bail!("FIRST MSG SENT MUST BE INIT COMMAND");
     }
