@@ -55,6 +55,8 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
                 return Ok(());
             }
         }
+
+        data.clear();
     }
 
     loop {
