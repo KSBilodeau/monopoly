@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use async_std::net::{TcpListener, TcpStream};
-use eyre::Result;
+use eyre::{OptionExt, Result};
 use log::*;
 use soketto::handshake::Server;
 use soketto::handshake::server::Response;
@@ -12,7 +12,12 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
     let mut server = Server::new(stream);
 
     let websocket_key = {
-        let req = dbg!(server.receive_request().await?);
+        let req = server.receive_request().await?;
+
+        let headers = req.headers();
+        info!("HOST: {}", std::str::from_utf8(&headers.host)?);
+        info!("ORIGIN: {}", std::str::from_utf8(&headers.origin.ok_or_eyre("There was no origin")?)?);
+
         info!("Received request for path: {}", req.path());
         req.key()
     };
