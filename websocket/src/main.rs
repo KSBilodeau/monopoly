@@ -55,9 +55,9 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
                 return Ok(());
             }
         }
-
-        data.clear();
     }
+
+    data.clear();
 
     loop {
         let data_type = receiver.receive_data(&mut data).await?;
