@@ -1,10 +1,22 @@
 use std::net::SocketAddr;
 
 use async_std::net::{TcpListener, TcpStream};
-use eyre::{OptionExt, Result};
+use async_std::sync::Mutex;
+use eyre::Result;
 use log::*;
 use soketto::handshake::Server;
 use soketto::handshake::server::Response;
+
+#[derive(Debug)]
+struct Game {
+    host: Option<String>,
+    players: Vec<String>,
+}
+
+static GAME: Mutex<Game> = Mutex::new(Game {
+    host: None,
+    players: vec![],
+});
 
 async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
     info!("Serving WS connection on {}", addr);
@@ -13,11 +25,6 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
 
     let websocket_key = {
         let req = server.receive_request().await?;
-
-        let headers = req.headers();
-        info!("HOST: {}", std::str::from_utf8(&headers.host)?);
-        info!("ORIGIN: {}", std::str::from_utf8(&headers.origin.ok_or_eyre("There was no origin")?)?);
-
         info!("Received request for path: {}", req.path());
         req.key()
     };
@@ -28,7 +35,6 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
     let (mut sender, mut receiver) = server.into_builder().finish();
 
     let mut data = Vec::new();
-
     loop {
         let data_type = receiver.receive_data(&mut data).await?;
 
@@ -38,7 +44,12 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
             info!("Received data frame: {:?} \"{}\"", data_type, data);
 
             let resp = handle_data(data).await?;
-            sender.send_text(resp).await?;
+            sender.send_text(&resp).await?;
+
+            {
+                let lock = GAME.lock().await;
+                info!("GAME State: {:?}", *lock);
+            }
 
             info!("Responded with: \"{}\"", resp);
         }
@@ -47,8 +58,52 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
     }
 }
 
-async fn handle_data(data: &str) -> Result<&str> {
-    Ok(data)
+async fn handle_data(data: &str) -> Result<String> {
+    let mut request = data.lines();
+
+    let Some(req_type) = request.next() else {
+        return Ok("INVALID REQUEST TYPE".into());
+    };
+
+    match req_type {
+        "INIT" => handle_init(&mut request).await,
+        _ => Ok("INVALID REQUEST TYPE".into()),
+    }
+}
+
+async fn handle_init(request: &mut core::str::Lines<'_>) -> Result<String> {
+    let num_args = request.clone().count();
+
+    if num_args < 1 {
+        Ok("INVALID INIT REQUEST".into())
+    } else if num_args == 1 {
+        let username = request.next().unwrap();
+
+        {
+            let mut lock = GAME.lock().await;
+            lock.players.push(username.into());
+        }
+
+        Ok(format!("{} ADDED", username))
+    } else {
+        let username = request.next().unwrap();
+        let host_key = request.next().unwrap();
+
+        if host_key != std::env::var("MONOPOLY_HOST_KEY")? {
+            Ok("INVALID HOST KEY".into())
+        } else {
+            let mut lock = GAME.lock().await;
+
+            if lock.host.is_none() {
+                lock.players.push(username.into());
+                lock.host = Some(username.into());
+
+                Ok(format!("{} ADDED AS HOST", username))
+            } else {
+                Ok("HOST HAS ALREADY BEEN ADDED".into())
+            }
+        }
+    }
 }
 
 fn main() -> Result<()> {
