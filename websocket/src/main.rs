@@ -40,13 +40,24 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
     let mut data = Vec::new();
 
     {
-        receiver.receive_data(&mut data).await?;
+        let data_type = receiver.receive_data(&mut data).await?;
 
         let data = std::str::from_utf8(&data)?;
         let mut request = data.lines();
 
+        info!("Received data frame: {:?} \"{}\"", data_type, data);
+
         match handle_init(&mut request).await {
-            Ok(msg) => sender.send_text(msg).await?,
+            Ok(msg) => {
+                {
+                    let lock = GAME.lock().await;
+                    info!("GAME State: {:?}", *lock);
+                }
+
+                info!("Responded with: \"{}\"", msg);
+
+                sender.send_text(msg).await?
+            },
             Err(e) => {
                 sender.send_text(format!("{}", e)).await?;
                 sender.close().await?;
