@@ -4,8 +4,8 @@ use async_std::net::{TcpListener, TcpStream};
 use async_std::sync::Mutex;
 use eyre::Result;
 use log::*;
-use soketto::handshake::Server;
 use soketto::handshake::server::Response;
+use soketto::handshake::Server;
 
 #[derive(Debug)]
 struct Game {
@@ -29,7 +29,10 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
         req.key()
     };
 
-    let accept = Response::Accept { key: websocket_key, protocol: None };
+    let accept = Response::Accept {
+        key: websocket_key,
+        protocol: None,
+    };
     server.send_response(&accept).await?;
 
     let (mut sender, mut receiver) = server.into_builder().finish();
@@ -37,19 +40,20 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
     let mut data = Vec::new();
 
     {
-        info!("WAITING FOR INIT");
         receiver.receive_data(&mut data).await?;
-        let data = std::str::from_utf8(&data)?;
 
+        let data = std::str::from_utf8(&data)?;
         let mut request = data.lines();
-        if let Err(e) = handle_init(&mut request).await {
-            sender.send_text(format!("{}", e)).await?;
-            sender.close().await?;
-            return Ok(());
+
+        match handle_init(&mut request).await {
+            Ok(msg) => sender.send_text(msg).await?,
+            Err(e) => {
+                sender.send_text(format!("{}", e)).await?;
+                sender.close().await?;
+                return Ok(());
+            }
         }
     }
-
-    info!("INIT COMPLETE");
 
     loop {
         let data_type = receiver.receive_data(&mut data).await?;
@@ -127,7 +131,9 @@ async fn handle_init(request: &mut core::str::Lines<'_>) -> Result<String> {
 }
 
 fn main() -> Result<()> {
-    simple_logger::SimpleLogger::new().with_level(LevelFilter::Debug).init()?;
+    simple_logger::SimpleLogger::new()
+        .with_level(LevelFilter::Debug)
+        .init()?;
 
     async_std::task::block_on(async move {
         let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_WS_PORT")?);
