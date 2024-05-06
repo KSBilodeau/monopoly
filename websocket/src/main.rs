@@ -12,8 +12,8 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
     let mut server = Server::new(stream);
 
     let websocket_key = {
-        let req = server.receive_request().await?;
-        info!("[{}] Received request for path: {}", addr, req.path());
+        let req = dbg!(server.receive_request().await?);
+        info!("Received request for path: {}", req.path());
         req.key()
     };
 
@@ -30,12 +30,12 @@ async fn serve_websocket(stream: TcpStream, addr: SocketAddr) -> Result<()> {
         if data_type.is_text() {
             let data = std::str::from_utf8(&data)?;
 
-            info!("[{}] Received data frame: {:?} \"{}\"", addr, data_type, data);
+            info!("Received data frame: {:?} \"{}\"", data_type, data);
 
             let resp = handle_data(data).await?;
             sender.send_text(resp).await?;
 
-            info!("[{}] Responded with: \"{}\"", addr, resp);
+            info!("Responded with: \"{}\"", resp);
         }
 
         data.clear();
