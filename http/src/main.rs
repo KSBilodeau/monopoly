@@ -12,27 +12,27 @@ use rand::Rng;
 use tide::Request;
 
 async fn create_game(_: Request<()>) -> tide::Result {
-    let mut game_code = *b"/monopoly_socks/        ";
-
-    loop {
-        for i in 16..24 {
-            game_code[i] = rand::thread_rng().gen_range(b'A'..=b'Z');
-        }
-
-        if !Path::new(OsStr::from_bytes(&game_code)).exists() {
-            break;
-        }
-    }
-
-    let mut host_key = String::new();
-    for _ in 0..128 {
-        host_key.push(rand::thread_rng().gen_range(b'A'..=b'Z') as char);
-    }
-
-    Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
-        .env("MONOPOLY_GAME_PATH", OsStr::from_bytes(&game_code))
-        .env("MONOPOLY_HOST_KEY", host_key)
-        .spawn()?;
+    // let mut game_code = *b"/monopoly_socks/        ";
+    //
+    // loop {
+    //     for i in 16..24 {
+    //         game_code[i] = rand::thread_rng().gen_range(b'A'..=b'Z');
+    //     }
+    //
+    //     if !Path::new(OsStr::from_bytes(&game_code)).exists() {
+    //         break;
+    //     }
+    // }
+    //
+    // let mut host_key = String::new();
+    // for _ in 0..128 {
+    //     host_key.push(rand::thread_rng().gen_range(b'A'..=b'Z') as char);
+    // }
+    //
+    // Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
+    //     .env("MONOPOLY_GAME_PATH", OsStr::from_bytes(&game_code))
+    //     .env("MONOPOLY_HOST_KEY", host_key)
+    //     .spawn()?;
 
     Ok("HELLO WORLD".into())
 }
