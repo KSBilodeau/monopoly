@@ -29,12 +29,10 @@ async fn create_game(_: Request<()>) -> tide::Result {
         host_key.push(rand::thread_rng().gen_range(b'A'..=b'Z') as char);
     }
 
-    let _ = dbg!(Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
+    Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
         .env("MONOPOLY_GAME_PATH", OsStr::from_bytes(&game_code))
         .env("MONOPOLY_HOST_KEY", host_key)
-        .spawn());
-
-    println!("IS THE ISSUE HAPPENING AFTER HERE?");
+        .spawn()?;
 
     Ok("HELLO WORLD".into())
 }
@@ -42,10 +40,6 @@ async fn create_game(_: Request<()>) -> tide::Result {
 async fn test_sock(mut request: Request<()>) -> tide::Result {
     let _ =  dbg!(request.body_string().await);
     Ok(request.body_string().await?.into())
-}
-
-async fn test(_: Request<()>) -> tide::Result {
-    Ok("THIS IS A TEST".into())
 }
 
 fn main() -> Result<()> {
@@ -57,7 +51,7 @@ fn main() -> Result<()> {
         let task_one = async_std::task::spawn(async move {
             let mut server = tide::new();
 
-            server.at("/api").get(create_game);
+            server.at("/api/create_game").get(create_game);
 
             let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_HTTP_PORT")?);
             server.listen(ip_addr).await?;
