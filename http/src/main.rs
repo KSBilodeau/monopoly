@@ -42,8 +42,8 @@ async fn test_sock(mut request: Request<()>) -> tide::Result {
     Ok(request.body_string().await?.into())
 }
 
-async fn test(mut request: Request<()>) -> tide::Result {
-    Ok(request.body_string().await?.into())
+async fn test(_: Request<()>) -> tide::Result {
+    Ok("THIS IS A TEST".into())
 }
 
 fn main() -> Result<()> {
