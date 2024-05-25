@@ -34,6 +34,8 @@ async fn create_game(_: Request<()>) -> tide::Result {
         .env("MONOPOLY_HOST_KEY", host_key)
         .spawn())?;
 
+    println!("IS THE ISSUE HAPPENING AFTER HERE?");
+
     Ok("HELLO WORLD".into())
 }
 
