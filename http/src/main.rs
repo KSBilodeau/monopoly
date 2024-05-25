@@ -4,9 +4,9 @@
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
+use std::process::Command;
 
 use async_std::prelude::FutureExt;
-use async_std::process::Command;
 use eyre::Result;
 use rand::Rng;
 use tide::Request;
@@ -28,8 +28,6 @@ async fn create_game(_: Request<()>) -> tide::Result {
     for _ in 0..128 {
         host_key.push(rand::thread_rng().gen_range(b'A'..=b'Z') as char);
     }
-
-    println!("TIDE IS EATING ME?");
 
     dbg!(Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
         .env("MONOPOLY_GAME_PATH", OsStr::from_bytes(&game_code))
