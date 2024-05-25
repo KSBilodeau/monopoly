@@ -56,7 +56,7 @@ fn main() -> Result<()> {
             let mut server = tide::new();
 
             server.at("/api/create_game").get(create_game);
-            server.at("/").get(test);
+            server.at("/api").get(test);
 
             let ip_addr = format!("127.0.0.1:{}", std::env::var("MONOPOLY_HTTP_PORT")?);
             server.listen(ip_addr).await?;
