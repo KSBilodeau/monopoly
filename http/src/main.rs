@@ -29,10 +29,10 @@ async fn create_game(_: Request<()>) -> tide::Result {
         host_key.push(rand::thread_rng().gen_range(b'A'..=b'Z') as char);
     }
 
-    dbg!(Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
+    let _ = dbg!(Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
         .env("MONOPOLY_GAME_PATH", OsStr::from_bytes(&game_code))
         .env("MONOPOLY_HOST_KEY", host_key)
-        .spawn())?;
+        .spawn());
 
     println!("IS THE ISSUE HAPPENING AFTER HERE?");
 
