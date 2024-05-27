@@ -1,8 +1,6 @@
 #![warn(clippy::pedantic)]
 #![deny(rust_2018_idioms)]
 
-use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::process::Command;
 
@@ -12,14 +10,14 @@ use rand::Rng;
 use tide::Request;
 
 async fn create_game(_: Request<()>) -> tide::Result {
-    let mut game_code = *b"/monopoly_socks/        ";
+    let mut game_code = String::from("/monopoly_socks/");
 
     loop {
-        for i in 16..24 {
-            game_code[i] = rand::thread_rng().gen_range(b'A'..=b'Z');
+        for _ in 0..8 {
+            game_code.push(rand::thread_rng().gen_range(b'A'..=b'Z') as char);
         }
 
-        if !Path::new(OsStr::from_bytes(&game_code)).exists() {
+        if !Path::new(&game_code).exists() {
             break;
         }
     }
@@ -30,11 +28,11 @@ async fn create_game(_: Request<()>) -> tide::Result {
     }
 
     Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
-        .env("MONOPOLY_GAME_PATH", OsStr::from_bytes(&game_code))
+        .env("MONOPOLY_GAME_PATH", &game_code)
         .env("MONOPOLY_HOST_KEY", host_key)
         .spawn()?;
 
-    Ok("HELLO WORLD".into())
+    Ok(game_code[16..24].into())
 }
 
 async fn test_sock(mut request: Request<()>) -> tide::Result {
