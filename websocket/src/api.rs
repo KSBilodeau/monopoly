@@ -132,9 +132,10 @@ impl Echo {
 
         let Ok(_) = stream
             .write_all(concat_bytes!(
-                b"GET /api/internal/test HTTP/1.0",
-                b"\ncontent-type: text/plain",
-                b"\ncontent-length: 5\n",
+                b"GET /api/internal/test HTTP/1.1",
+                b"\nHost: 127.0.0.1",
+                b"\nContent-Type: text/plain",
+                b"\nContent-Length: 5\n",
                 b"\nHello"
             ))
             .await
