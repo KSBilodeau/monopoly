@@ -7,6 +7,7 @@ use std::process::Command;
 
 use async_std::prelude::FutureExt;
 use eyre::Result;
+use log::LevelFilter;
 use rand::Rng;
 use tide::prelude::*;
 use tide::Request;
@@ -38,8 +39,7 @@ async fn create_game(_: Request<()>) -> tide::Result {
 }
 
 async fn test_sock(mut request: Request<()>) -> tide::Result {
-    let _ = dbg!(request.body_string().await);
-    Ok(request.body_string().await?.into())
+    Ok(dbg!(request.body_string().await?).into())
 }
 
 fn main() -> Result<()> {
@@ -48,6 +48,7 @@ fn main() -> Result<()> {
     }
 
     simple_logger::SimpleLogger::new()
+        .with_level(LevelFilter::Debug)
         .init()?;
 
     async_std::task::block_on(async move {
