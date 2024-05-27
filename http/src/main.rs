@@ -29,10 +29,10 @@ async fn create_game(_: Request<()>) -> tide::Result {
 
     Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
         .env("MONOPOLY_GAME_PATH", &game_code)
-        .env("MONOPOLY_HOST_KEY", host_key)
+        .env("MONOPOLY_HOST_KEY", &host_key)
         .spawn()?;
 
-    Ok(format!("{}\n{}", game_code[16..24], host_key).into())
+    Ok(format!("{}\n{}", &game_code[16..24], host_key).into())
 }
 
 async fn test_sock(mut request: Request<()>) -> tide::Result {
