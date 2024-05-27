@@ -136,7 +136,7 @@ impl Echo {
                 b"\r\nHost: 127.0.0.1",
                 b"\r\nContent-Type: text/plain",
                 b"\r\nContent-Length: 5\r\n",
-                b"\r\nConnection: close"
+                b"\r\nConnection: close",
                 b"\r\nHello"
             ))
             .await
