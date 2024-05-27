@@ -1,12 +1,14 @@
 #![warn(clippy::pedantic)]
 #![deny(rust_2018_idioms)]
 
+use async_std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::process::Command;
 
 use async_std::prelude::FutureExt;
 use eyre::Result;
 use rand::Rng;
+use tide::prelude::*;
 use tide::Request;
 
 async fn create_game(_: Request<()>) -> tide::Result {
@@ -36,7 +38,7 @@ async fn create_game(_: Request<()>) -> tide::Result {
 }
 
 async fn test_sock(mut request: Request<()>) -> tide::Result {
-    let _ =  dbg!(request.body_string().await);
+    let _ = dbg!(request.body_string().await);
     Ok(request.body_string().await?.into())
 }
 
@@ -61,7 +63,11 @@ fn main() -> Result<()> {
             let mut server = tide::new();
 
             server.at("/api/internal/test").get(test_sock);
-            server.listen("http+unix://%2Fmonopoly_socks%2Fhost").await?;
+
+            let mut listener = server
+                .bind(UnixListener::bind("/monopoly_socks/host").await?)
+                .await?;
+            listener.accept().await?;
 
             Ok::<(), eyre::Error>(())
         });
