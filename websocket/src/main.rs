@@ -93,6 +93,8 @@ fn main() -> Result<()> {
         let server = UnixListener::bind(&ip_addr).await?;
         info!("Listening on {}", &ip_addr);
 
+        std::os::unix::fs::chown(ip_addr, Some(33), Some(33))?;
+
         while let Ok((stream, addr)) = server.accept().await {
             async_std::task::spawn(serve_websocket(stream, addr));
         }

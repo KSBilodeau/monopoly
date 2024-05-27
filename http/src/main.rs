@@ -62,7 +62,7 @@ fn main() -> Result<()> {
         let task_two = async_std::task::spawn(async move {
             let mut server = tide::new();
 
-            server.at("/api/internal/test").get(test_sock);
+            server.at("/api/internal/test").post(test_sock);
             server.listen("http+unix://%2Fmonopoly_socks%2Fhost").await?;
 
             Ok::<(), eyre::Error>(())
