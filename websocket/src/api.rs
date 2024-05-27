@@ -131,13 +131,13 @@ impl Echo {
         };
 
         let Ok(_) = stream
-            .write_all(dbg!(format!("{}{}{}{}{}{}\r\n\r\n{}",
+            .write_all(dbg!(format!("{}\r\n{}\r\n{}\r\n{}{}\r\n{}\r\n\r\n{}",
                 "GET /api/internal/test HTTP/1.1",
-                "\r\nHost: 127.0.0.1",
-                "\r\nConnection: close",
-                "\r\nContent-Type: text/plain",
-                "\r\nContent-Length: ",
+                "Host: 127.0.0.1",
+                "Content-Type: text/plain",
+                "Content-Length: ",
                 self.msg.len(),
+                "Connection: close",
                 self.msg
             )).as_bytes())
             .await
