@@ -32,7 +32,7 @@ async fn create_game(_: Request<()>) -> tide::Result {
         .env("MONOPOLY_HOST_KEY", host_key)
         .spawn()?;
 
-    Ok(format!("{}\n{}", game_code[16..24].into(), host_key).into())
+    Ok(format!("{}\n{}", game_code[16..24], host_key).into())
 }
 
 async fn test_sock(mut request: Request<()>) -> tide::Result {
