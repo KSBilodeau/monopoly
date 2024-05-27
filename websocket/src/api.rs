@@ -35,7 +35,7 @@ impl Command {
     pub async fn execute(self, game: &mut Session) -> Self {
         match self {
             Self::INIT(init) => init.execute(game),
-            Self::ECHO(echo)  => echo.execute().await,
+            Self::ECHO(echo) => echo.execute().await,
             _ => self,
         }
     }
@@ -131,13 +131,9 @@ impl Echo {
         };
 
         let Ok(_) = stream
-            .write_all(dbg!(format!("{}\r\n{}\r\n{}\r\n{}{}\r\n{}\r\n\r\n{}",
-                "GET /api/internal/test HTTP/1.1",
-                "Host: 127.0.0.1",
-                "Content-Type: text/plain",
-                "Content-Length: ",
+            .write_all(dbg!(format!(
+                "GET /api/internal/test HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
                 self.msg.len(),
-                "Connection: close",
                 self.msg
             )).as_bytes())
             .await
