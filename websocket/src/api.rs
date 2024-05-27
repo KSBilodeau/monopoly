@@ -35,7 +35,7 @@ impl Command {
     pub async fn execute(self, game: &mut Session) -> Self {
         match self {
             Self::INIT(init) => init.execute(game),
-            Self::ECHO(echo)  => echo.execute(),
+            Self::ECHO(echo)  => echo.execute().await,
             _ => self,
         }
     }
