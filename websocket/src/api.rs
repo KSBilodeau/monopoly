@@ -42,6 +42,7 @@ impl Command {
     pub async fn respond(self, sender: &mut Sender<UnixStream>) -> Command {
         match self {
             Self::INIT(init) => init.respond(sender).await,
+            Self::ECHO(echo) => echo.respond(sender).await,
             Self::ERROR(error) => error.respond(sender).await,
             _ => self,
         }
