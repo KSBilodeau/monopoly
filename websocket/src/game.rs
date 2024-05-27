@@ -29,8 +29,12 @@ impl Session {
         self.players.push(username.clone());
 
         if let Some(key) = host_key {
-            if &*self.host_key == key {
+            if self.host.is_some() {
+                bail!("7");
+            }
 
+            if &*self.host_key == key {
+                self.host = Some(username.clone())
             }
         }
 
