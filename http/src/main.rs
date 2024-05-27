@@ -47,6 +47,9 @@ fn main() -> Result<()> {
         libc::signal(libc::SIGCHLD, libc::SIG_IGN);
     }
 
+    simple_logger::SimpleLogger::new()
+        .init()?;
+
     async_std::task::block_on(async move {
         let task_one = async_std::task::spawn(async move {
             let mut server = tide::new();
@@ -64,6 +67,7 @@ fn main() -> Result<()> {
 
             server.at("/api/internal/test").get(test_sock);
 
+            std::fs::remove_file("/monopoly_socks/host")?;
             let mut listener = server
                 .bind(UnixListener::bind("/monopoly_socks/host").await?)
                 .await?;

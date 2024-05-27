@@ -134,9 +134,9 @@ impl Echo {
             .write_all(concat_bytes!(
                 b"GET /api/internal/test HTTP/1.1",
                 b"\r\nHost: 127.0.0.1",
+                b"\r\nConnection: close",
                 b"\r\nContent-Type: text/plain",
                 b"\r\nContent-Length: 5\r\n",
-                b"\r\nConnection: close",
                 b"\r\nHello"
             ))
             .await
