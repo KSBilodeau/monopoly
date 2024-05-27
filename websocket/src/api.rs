@@ -131,14 +131,15 @@ impl Echo {
         };
 
         let Ok(_) = stream
-            .write_all(concat_bytes!(
-                b"GET /api/internal/test HTTP/1.1",
-                b"\r\nHost: 127.0.0.1",
-                b"\r\nConnection: close",
-                b"\r\nContent-Type: text/plain",
-                b"\r\nContent-Length: 5\r\n",
-                b"\r\nHello"
-            ))
+            .write_all(dbg!(format!("{}{}{}{}{}{}\r\n\r\n{}",
+                "GET /api/internal/test HTTP/1.1",
+                "\r\nHost: 127.0.0.1",
+                "\r\nConnection: close",
+                "\r\nContent-Type: text/plain",
+                "\r\nContent-Length: ",
+                self.msg.len(),
+                self.msg
+            )).as_bytes())
             .await
         else {
             return Command::error(self.nonce, "5".into());
