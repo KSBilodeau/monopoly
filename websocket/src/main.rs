@@ -3,6 +3,7 @@
 #![warn(clippy::pedantic)]
 #![deny(rust_2018_idioms)]
 
+use std::io::Read;
 use std::os::unix::net::SocketAddr;
 
 use crate::api::Command;
@@ -19,7 +20,13 @@ mod game;
 static GAME: Mutex<game::Session> = Mutex::new(game::Session::new());
 
 async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
-    info!("Serving WS connection on {:?}", addr);
+    let mut rand_file = std::fs::File::open("/dev/random")?;
+    let mut buf = [0u8; 4];
+    rand_file.read_exact(&mut buf)?;
+
+    let ws_id = u32::from_be_bytes(buf);
+
+    info!("Serving WS connection (ID #: {}) on {:?}", ws_id, addr.as_pathname());
 
     let mut server = Server::new(stream);
 
@@ -72,6 +79,11 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
                         error.nonce(),
                         error.code()
                     ),
+                    Command::KILL => {
+                        info!("Killing connection for WS with ID: {}", ws_id);
+                        let _ = sender.close();
+                        break;
+                    }
                 }
 
                 info!("Game state: {:#?}", game);
@@ -80,6 +92,8 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
 
         data.clear();
     }
+
+    Ok(())
 }
 
 fn main() -> Result<()> {

@@ -10,6 +10,7 @@ pub enum Command {
     INIT(Init),
     ECHO(Echo),
     ERROR(Error),
+    KILL,
 }
 
 impl Command {
@@ -17,7 +18,7 @@ impl Command {
         let mut request = request.lines();
 
         let Some(nonce) = request.next().map(str::to_string) else {
-            unreachable!();
+            return Command::KILL;
         };
 
         let Some(command) = request.next() else {
@@ -27,7 +28,7 @@ impl Command {
         match command {
             "INIT" => Self::init(nonce, &mut request),
             "ECHO" => Self::echo(nonce, &mut request),
-            _ => unreachable!(),
+            _ => return Self::error(nonce, "0".into()),
         }
     }
 
@@ -76,7 +77,7 @@ impl Init {
     pub fn new(nonce: String, request: &mut std::str::Lines<'_>) -> Result<Init> {
         Ok(Init {
             nonce,
-            username: request.next().map(str::to_string).ok_or_eyre("0")?,
+            username: request.next().map(str::to_string).ok_or_eyre("1")?,
             host_key: request.next().map(str::to_string),
         })
     }
@@ -106,13 +107,15 @@ impl Init {
 pub struct Echo {
     nonce: String,
     msg: String,
+    resp: String,
 }
 
 impl Echo {
     pub fn new(nonce: String, request: &mut std::str::Lines<'_>) -> Result<Echo> {
         Ok(Echo {
             nonce,
-            msg: request.next().map(str::to_string).ok_or_eyre("0")?,
+            msg: request.next().map(str::to_string).ok_or_eyre("3")?,
+            resp: String::new(),
         })
     }
 
@@ -120,9 +123,9 @@ impl Echo {
         &self.nonce
     }
 
-    async fn execute(self) -> Command {
+    async fn execute(mut self) -> Command {
         let Ok(mut stream) = UnixStream::connect("/monopoly_socks/host").await else {
-            return Command::error(self.nonce, "1".into());
+            return Command::error(self.nonce, "4".into());
         };
 
         let Ok(_) = stream
@@ -134,15 +137,20 @@ impl Echo {
             ))
             .await
         else {
-            return Command::error(self.nonce, "2".into());
+            return Command::error(self.nonce, "5".into());
         };
 
-        let mut result = String::new();
-        let Ok(_) = stream.read_to_string(&mut result).await else {
-            return Command::error(self.nonce, "3".into());
+        let Ok(_) = stream.read_to_string(&mut self.resp).await else {
+            return Command::error(self.nonce, "6".into());
         };
 
-        info!("RESULT OF ECHO OPERATION:\n{}", result);
+        info!("RESULT OF ECHO OPERATION:\n{}", self.resp);
+
+        Command::ECHO(self)
+    }
+
+    async fn respond(self, sender: &mut Sender<UnixStream>) -> Command {
+        sender.send_text(&self.resp).await.unwrap();
 
         Command::ECHO(self)
     }

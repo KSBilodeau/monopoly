@@ -22,7 +22,7 @@ impl Session {
     pub fn add_player(&mut self, username: &String, host_key: &Option<String>) -> Result<()> {
         for player in &self.players {
             if player == username {
-                bail!("1");
+                bail!("2");
             }
         }
 
