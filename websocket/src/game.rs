@@ -1,21 +1,18 @@
-use std::sync::LazyLock;
 use eyre::{bail, Result};
 
 #[derive(Debug)]
 pub struct Session {
     host: Option<String>,
     players: Vec<String>,
-    host_key: LazyLock<String>,
+    host_key: String,
 }
 
 impl Session {
-    pub const fn new() -> Session {
+    pub fn new() -> Session {
         Session {
             host: None,
             players: vec![],
-            host_key: LazyLock::new(|| {
-                std::env::var("MONOPOLY_HOST_KEY").expect("MONOPOLY_HOST_KEY MISSING")
-            }),
+            host_key: std::env::var("MONOPOLY_HOST_KEY").unwrap(),
         }
     }
 
@@ -39,6 +36,10 @@ impl Session {
         self.players.push(username.clone());
 
         Ok(())
+    }
+
+    pub fn players(&self) -> &Vec<String> {
+        &self.players
     }
 }
 

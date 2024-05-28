@@ -30,7 +30,8 @@ async fn create_game(_: Request<()>) -> tide::Result {
         host_key.push(rand::thread_rng().gen_range(b'A'..=b'Z') as char);
     }
 
-    Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH")?)
+    Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH").unwrap())
+        .env("MONOPOLY_CHOWN_ID", std::env::var("MONOPOLY_CHOWN_ID").unwrap())
         .env("MONOPOLY_GAME_PATH", &game_code)
         .env("MONOPOLY_HOST_KEY", &host_key)
         .spawn()?;
@@ -50,6 +51,19 @@ fn main() -> Result<()> {
     simple_logger::SimpleLogger::new()
         .with_level(LevelFilter::Debug)
         .init()?;
+
+    assert!(
+        std::env::var("MONOPOLY_GAME_BIN_PATH").is_ok(),
+        "MISSING MONOPOLY_GAME_BIN_PATH ENV VAR"
+    );
+    assert!(
+        std::env::var("MONOPOLY_HTTP_PORT").is_ok(),
+        "MISSING MONOPOLY_HTTP_PORT ENV VAR"
+    );
+    assert!(
+        std::env::var("MONOPOLY_CHOWN_ID").is_ok(),
+        "MISSING MONOPOLY_CHOWN_ID ENV VAR"
+    );
 
     async_std::task::block_on(async move {
         let task_one = async_std::task::spawn(async move {
