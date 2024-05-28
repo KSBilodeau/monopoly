@@ -7,13 +7,14 @@ use std::io::Read;
 use std::os::unix::net::SocketAddr;
 use std::sync::LazyLock;
 
-use crate::api::CommandHandler;
 use async_std::os::unix::net::{UnixListener, UnixStream};
 use async_std::sync::Mutex;
 use eyre::Result;
 use log::*;
-use soketto::handshake::server::Response;
 use soketto::handshake::Server;
+use soketto::handshake::server::Response;
+
+use crate::api::CommandHandler;
 
 mod api;
 mod game;
@@ -57,7 +58,7 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     let (mut sender, mut receiver) = server.into_builder().finish();
 
     let mut data = Vec::new();
-    let mut comm_handler = CommandHandler::new();
+    let mut comm_handler = CommandHandler::new(ws_id);
 
     loop {
         let Ok(data_type) = receiver.receive_data(&mut data).await else {
@@ -76,12 +77,7 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
             {
                 let game = &mut *GAME.lock().await;
 
-                comm_handler
-                    .execute_command(ws_id, data, game, &mut sender)
-                    .await;
-                if comm_handler.is_kill() {
-                    break;
-                }
+                comm_handler.execute_command(data, game, &mut sender).await;
 
                 info!("Game state: {:#?}", game);
             }

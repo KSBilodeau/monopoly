@@ -1,31 +1,33 @@
-use crate::game::Session;
+use std::fmt::Debug;
+
 use async_std::io::{ReadExt, WriteExt};
 use async_std::os::unix::net::UnixStream;
 use log::{error, info};
 use soketto::Sender;
-use std::fmt::Debug;
+
+use crate::game::Session;
 
 #[derive(Eq, PartialEq)]
 enum CommandState {
     ExpectInit,
     Initialized,
-    Kill,
 }
 
 pub struct CommandHandler {
+    ws_id: u32,
     state: CommandState,
 }
 
 impl CommandHandler {
-    pub fn new() -> Self {
+    pub fn new(ws_id: u32) -> Self {
         CommandHandler {
+            ws_id,
             state: CommandState::ExpectInit,
         }
     }
 
     pub async fn execute_command(
         &mut self,
-        ws_id: u32,
         data: &str,
         game: &mut Session,
         sender: &mut Sender<UnixStream>,
@@ -33,25 +35,21 @@ impl CommandHandler {
         let command = Command::new(data);
 
         if ((self.state == CommandState::ExpectInit) != command.is_init()) && !command.is_error() {
-            Command::from(Error::new(&command.nonce(), "8".into()))
+            Error::new(&command.nonce(), "8".into())
                 .execute(game)
                 .respond(sender);
 
             return;
         }
 
-        let command: Box<dyn CommandExt> = command.execute(game).respond(sender).into();
+        let command = command.execute(game).respond(sender);
 
         if command.is_error() {
             error!(
                 "Command {} completed with error code: {}",
-                command.nonce(), command.error_code().unwrap(),
+                command.nonce(),
+                command.error_code().unwrap(),
             );
-        } else if command.is_kill() {
-            info!("Killing connection for WS with ID: {}", ws_id);
-
-            let _ = sender.close();
-            self.state = CommandState::Kill;
         } else {
             info!(
                 "Command {} completed successfully {:#?}",
@@ -64,18 +62,14 @@ impl CommandHandler {
             }
         }
     }
-
-    pub fn is_kill(&self) -> bool {
-        self.state == CommandState::Kill
-    }
 }
 
 trait CommandExt: Debug {
-    fn execute(self: Box<Self>, game: &mut Session) -> Command;
+    fn execute(self: Box<Self>, game: &mut Session) -> Box<dyn CommandExt>;
 
-    fn respond(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Command;
+    fn respond(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Box<dyn CommandExt>;
 
-    fn nonce(&self) -> &String;
+    fn nonce(&self) -> String;
 
     fn is_init(&self) -> bool {
         false
@@ -85,81 +79,29 @@ trait CommandExt: Debug {
         false
     }
 
-    fn error_code(&self) -> Option<&String> {
+    fn error_code(&self) -> Option<String> {
         None
     }
-
-    fn is_kill(&self) -> bool {
-        false
-    }
 }
 
-#[derive(Debug)]
-enum Command {
-    Init(Init),
-    Echo(Echo),
-    Error(Error),
-    Kill(Kill),
-}
+struct Command {}
 
 impl Command {
-    fn new(data: &str) -> Command {
+    fn new(data: &str) -> Box<dyn CommandExt> {
         let mut request = data.lines();
 
         let Some(nonce) = request.next().map(str::to_string) else {
-            return Kill::new();
+            return Error::new(&String::from("0"), "0".into());
         };
 
         let Some(command) = request.next() else {
-            return Error::new(&nonce, "0".into()).into();
+            return Error::new(&nonce, "0".into());
         };
 
         match command {
             "INIT" => Init::new(&nonce, &mut request),
             "ECHO" => Echo::new(&nonce, &mut request),
-            _ => Error::new(&nonce, "0".into()).into(),
-        }
-    }
-
-    fn execute(self, game: &mut Session) -> Self {
-        Into::<Box<dyn CommandExt>>::into(self).execute(game)
-    }
-
-    fn respond(self, sender: &mut Sender<UnixStream>) -> Self {
-        Into::<Box<dyn CommandExt>>::into(self).respond(sender)
-    }
-
-    fn nonce(&self) -> &String {
-        Into::<Box<&dyn CommandExt>>::into(self).nonce()
-    }
-
-    fn is_init(&self) -> bool {
-        Into::<Box<&dyn CommandExt>>::into(self).is_init()
-    }
-
-    fn is_error(&self) -> bool {
-        Into::<Box<&dyn CommandExt>>::into(self).is_error()
-    }
-}
-
-impl From<Command> for Box<dyn CommandExt> {
-    fn from(command: Command) -> Self {
-        match command {
-            Command::Init(init) => Box::new(init),
-            Command::Echo(echo) => Box::new(echo),
-            Command::Error(error) => Box::new(error),
-            Command::Kill(kill) => Box::new(kill),
-        }
-    }
-}
-
-impl<'a> From<&'a Command> for Box<&'a dyn CommandExt> {
-    fn from(command: &'a Command) -> Self {
-        match command {
-            Command::Init(init) => Box::new(*&init),
-            Command::Echo(echo) => Box::new(*&echo),
-            Command::Error(error) => Box::new(*&error),
-            Command::Kill(kill) => Box::new(*&kill),
+            _ => Error::new(&nonce, "0".into()),
         }
     }
 }
@@ -173,56 +115,47 @@ pub struct Init {
 }
 
 impl Init {
-    fn new(nonce: &String, request: &mut std::str::Lines<'_>) -> Command {
-        Init {
+    fn new(nonce: &String, request: &mut std::str::Lines<'_>) -> Box<dyn CommandExt> {
+        Box::new(Init {
             nonce: nonce.clone(),
             username: {
                 let Some(username) = request.next().map(str::to_string) else {
-                    return Error::new(&nonce.clone(), "1".into()).into();
+                    return Error::new(&nonce, "1".into());
                 };
 
                 username
             },
             host_key: request.next().map(str::to_string),
             players: vec![],
-        }
-        .into()
+        })
     }
 }
 
 impl CommandExt for Init {
-    fn execute(mut self: Box<Init>, game: &mut Session) -> Command {
-        let command = match game.add_player(&self.username, &self.host_key) {
-            Ok(_) => Command::Init({
+    fn execute(mut self: Box<Init>, game: &mut Session) -> Box<dyn CommandExt> {
+        match game.add_player(&self.username, &self.host_key) {
+            Ok(_) => {
                 self.players = game.players().clone();
 
-                *self
-            }),
-            Err(err) => Error::new(&self.nonce, err.to_string()).into(),
-        };
-
-        command
+                self as Box<dyn CommandExt>
+            }
+            Err(err) => Error::new(&self.nonce, err.to_string()),
+        }
     }
 
-    fn respond(self: Box<Init>, sender: &mut Sender<UnixStream>) -> Command {
+    fn respond(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Box<dyn CommandExt> {
         let future = sender.send_text(format!("{}\nSUCCESS", self.nonce));
         async_std::task::block_on(async move { future.await.unwrap() });
 
-        Command::Init(*self)
+        self
     }
 
-    fn nonce(&self) -> &String {
-        &self.nonce
+    fn nonce(&self) -> String {
+        self.nonce.clone()
     }
 
     fn is_init(&self) -> bool {
         true
-    }
-}
-
-impl From<Init> for Command {
-    fn from(init: Init) -> Self {
-        Command::Init(init)
     }
 }
 
@@ -234,28 +167,27 @@ pub struct Echo {
 }
 
 impl Echo {
-    fn new(nonce: &String, request: &mut std::str::Lines<'_>) -> Command {
-        Echo {
+    fn new(nonce: &String, request: &mut std::str::Lines<'_>) -> Box<dyn CommandExt> {
+        Box::new(Echo {
             nonce: nonce.clone(),
             msg: {
                 let Some(msg) = request.next().map(str::to_string) else {
-                    return Error::new(&nonce.clone(), "3".into()).into();
+                    return Error::new(&nonce.clone(), "3".into());
                 };
 
                 msg
             },
             resp: String::new(),
-        }
-        .into()
+        })
     }
 }
 
 impl CommandExt for Echo {
-    fn execute(mut self: Box<Echo>, _: &mut Session) -> Command {
+    fn execute(mut self: Box<Echo>, _: &mut Session) -> Box<dyn CommandExt> {
         let future = UnixStream::connect("/monopoly_socks/host");
         let mut stream = match async_std::task::block_on(async move { future.await }) {
             Ok(stream) => stream,
-            Err(_) => return Error::new(&self.nonce, "4".into()).into(),
+            Err(_) => return Error::new(&self.nonce, "4".into()),
         };
 
         let request = format!(
@@ -266,34 +198,28 @@ impl CommandExt for Echo {
 
         let future = stream.write_all(request.as_bytes());
         let Ok(_) = async_std::task::block_on(async move { future.await }) else {
-            return Error::new(&self.nonce, "5".into()).into();
+            return Error::new(&self.nonce, "5".into());
         };
 
         let future = stream.read_to_string(&mut self.resp);
         let Ok(_) = async_std::task::block_on(async move { future.await }) else {
-            return Error::new(&self.nonce, "6".into()).into();
+            return Error::new(&self.nonce, "6".into());
         };
 
         info!("RESULT OF ECHO OPERATION:\n{}", self.resp);
 
-        Command::Echo(*self)
+        self
     }
 
-    fn respond(self: Box<Echo>, sender: &mut Sender<UnixStream>) -> Command {
+    fn respond(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Box<dyn CommandExt> {
         let future = sender.send_text(&self.resp);
         async_std::task::block_on(async move { future.await.unwrap() });
 
-        Command::Echo(*self)
+        self
     }
 
-    fn nonce(&self) -> &String {
-        &self.nonce
-    }
-}
-
-impl From<Echo> for Command {
-    fn from(echo: Echo) -> Self {
-        Command::Echo(echo)
+    fn nonce(&self) -> String {
+        self.nonce.clone()
     }
 }
 
@@ -304,82 +230,35 @@ pub struct Error {
 }
 
 impl Error {
-    pub fn new(nonce: &String, code: String) -> Error {
-        Error {
+    fn new(nonce: &String, code: String) -> Box<dyn CommandExt> {
+        Box::new(Error {
             nonce: nonce.clone(),
             code,
-        }
+        })
     }
 }
 
 impl CommandExt for Error {
-    fn execute(self: Box<Error>, _: &mut Session) -> Command {
-        Command::Error(*self)
+    fn execute(self: Box<Self>, _: &mut Session) -> Box<dyn CommandExt> {
+        self
     }
 
-    fn respond(self: Box<Error>, sender: &mut Sender<UnixStream>) -> Command {
+    fn respond(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Box<dyn CommandExt> {
         let future = sender.send_text(format!("-{}\n{}", self.nonce, self.code));
-
         async_std::task::block_on(async move { future.await.unwrap() });
 
-        Command::Error(*self)
+        self
     }
 
-    fn nonce(&self) -> &String {
-        &self.nonce
+    fn nonce(&self) -> String {
+        self.nonce.clone()
     }
 
     fn is_error(&self) -> bool {
         true
     }
 
-    fn error_code(&self) -> Option<&String> {
-        Some(&self.code)
-    }
-}
-
-impl From<Error> for Command {
-    fn from(err: Error) -> Self {
-        Command::Error(err)
-    }
-}
-
-#[derive(Debug)]
-struct Kill {
-    nonce: String,
-}
-
-impl Kill {
-    fn new() -> Command {
-        Command::Kill(Kill {
-            nonce: String::from("0"),
-        })
-    }
-}
-
-impl CommandExt for Kill {
-    fn execute(self: Box<Self>, _: &mut Session) -> Command {
-        Command::Kill(*self)
-    }
-
-    fn respond(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Command {
-        let future = sender.send_text(format!("-{}\nWS KILLED FOR UNSPECIFIED REASON", self.nonce));
-        async_std::task::block_on(async move { future.await.unwrap() });
-
-        Command::Kill(*self)
-    }
-
-    fn nonce(&self) -> &String {
-        &self.nonce
-    }
-
-    fn is_kill(&self) -> bool {
-        true
-    }
-}
-
-impl From<Kill> for Command {
-    fn from(kill: Kill) -> Self {
-        Command::Kill(kill)
+    fn error_code(&self) -> Option<String> {
+        Some(self.code.clone())
     }
 }
