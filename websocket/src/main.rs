@@ -11,8 +11,8 @@ use async_std::os::unix::net::{UnixListener, UnixStream};
 use async_std::sync::Mutex;
 use eyre::Result;
 use log::*;
-use soketto::handshake::Server;
 use soketto::handshake::server::Response;
+use soketto::handshake::Server;
 
 use crate::api::CommandHandler;
 
@@ -20,10 +20,10 @@ mod api;
 mod game;
 
 macro_rules! sync {
-     ($future: expr) => {
-         async_std::task::block_on(async { $future.await })
-     };
- }
+    ($future: expr) => {
+        async_std::task::block_on(async { $future.await })
+    };
+}
 
 pub(crate) use sync;
 
@@ -68,31 +68,48 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     let mut data = Vec::new();
     let mut comm_handler = CommandHandler::new(ws_id);
 
-    loop {
-        let Ok(data_type) = receiver.receive_data(&mut data).await else {
-            error!("Receiver closed prematurely on WS (#{})", ws_id);
-            break;
-        };
+    std::thread::scope(|s| {
+        info!("ENTERING THREADS SCOPE");
 
-        if data_type.is_text() {
-            let Ok(data) = std::str::from_utf8(&data) else {
-                error!("Received invalid UTF-8 bytes on WS (#{})", ws_id);
-                continue;
-            };
+        s.spawn(|| {
+            info!("ENTERING FIRST SCOPED THREAD");
 
-            info!("Received data frame: {:?} \"{}\"", data_type, data);
+            loop {
+                let Ok(data_type) = sync!(receiver.receive_data(&mut data)) else {
+                    error!("Receiver closed prematurely on WS (#{})", ws_id);
+                    break;
+                };
 
-            {
-                let game = &mut *GAME.lock().await;
+                if data_type.is_text() {
+                    let Ok(data) = std::str::from_utf8(&data) else {
+                        error!("Received invalid UTF-8 bytes on WS (#{})", ws_id);
+                        continue;
+                    };
 
-                comm_handler.execute_command(data, game, &mut sender).await;
+                    info!("Received data frame: {:?} \"{}\"", data_type, data);
 
-                info!("Game state: {:#?}", game);
+                    {
+                        let game = &mut *sync!(GAME.lock());
+
+                        sync!(comm_handler.execute_command(data, game, &mut sender));
+
+                        info!("Game state: {:#?}", game);
+                    }
+                }
+
+                data.clear();
             }
-        }
+        });
 
-        data.clear();
-    }
+        s.spawn(|| {
+            info!("ENTERING SECOND SCOPED THREAD");
+
+            loop {
+                info!("SECOND SCOPED THREAD HEARTBEAT");
+                std::thread::sleep(std::time::Duration::new(10, 0));
+            }
+        });
+    });
 
     Ok(())
 }
