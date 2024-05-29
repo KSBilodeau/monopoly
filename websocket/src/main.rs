@@ -19,6 +19,14 @@ use crate::api::CommandHandler;
 mod api;
 mod game;
 
+macro_rules! sync {
+     ($future: expr) => {
+         async_std::task::block_on(async { $future.await })
+     };
+ }
+
+pub(crate) use sync;
+
 static GAME: LazyLock<Mutex<game::Session>> = LazyLock::new(|| Mutex::new(game::Session::new()));
 
 async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {

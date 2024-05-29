@@ -14,14 +14,14 @@ enum CommandState {
 }
 
 pub struct CommandHandler {
-    ws_id: u32,
+    _ws_id: u32,
     state: CommandState,
 }
 
 impl CommandHandler {
-    pub fn new(ws_id: u32) -> Self {
+    pub fn new(_ws_id: u32) -> Self {
         CommandHandler {
-            ws_id,
+            _ws_id,
             state: CommandState::ExpectInit,
         }
     }
@@ -144,8 +144,7 @@ impl CommandExt for Init {
     }
 
     fn respond(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Box<dyn CommandExt> {
-        let future = sender.send_text(format!("{}\nSUCCESS", self.nonce));
-        async_std::task::block_on(async move { future.await.unwrap() });
+        crate::sync!(sender.send_text(format!("{}\nSUCCESS", self.nonce))).unwrap();
 
         self
     }
@@ -184,8 +183,7 @@ impl Echo {
 
 impl CommandExt for Echo {
     fn execute(mut self: Box<Echo>, _: &mut Session) -> Box<dyn CommandExt> {
-        let future = UnixStream::connect("/monopoly_socks/host");
-        let mut stream = match async_std::task::block_on(async move { future.await }) {
+        let mut stream = match crate::sync!(UnixStream::connect("/monopoly_socks/host")) {
             Ok(stream) => stream,
             Err(_) => return Error::new(&self.nonce, "4".into()),
         };
@@ -196,13 +194,11 @@ impl CommandExt for Echo {
             self.msg
         );
 
-        let future = stream.write_all(request.as_bytes());
-        let Ok(_) = async_std::task::block_on(async move { future.await }) else {
+        let Ok(_) = crate::sync!(stream.write_all(request.as_bytes())) else {
             return Error::new(&self.nonce, "5".into());
         };
 
-        let future = stream.read_to_string(&mut self.resp);
-        let Ok(_) = async_std::task::block_on(async move { future.await }) else {
+        let Ok(_) = crate::sync!(stream.read_to_string(&mut self.resp)) else {
             return Error::new(&self.nonce, "6".into());
         };
 
@@ -212,8 +208,7 @@ impl CommandExt for Echo {
     }
 
     fn respond(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Box<dyn CommandExt> {
-        let future = sender.send_text(&self.resp);
-        async_std::task::block_on(async move { future.await.unwrap() });
+        crate::sync!(sender.send_text(&self.resp)).unwrap();
 
         self
     }
@@ -244,8 +239,7 @@ impl CommandExt for Error {
     }
 
     fn respond(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Box<dyn CommandExt> {
-        let future = sender.send_text(format!("-{}\n{}", self.nonce, self.code));
-        async_std::task::block_on(async move { future.await.unwrap() });
+        crate::sync!(sender.send_text(format!("-{}\n{}", self.nonce, self.code))).unwrap();
 
         self
     }
