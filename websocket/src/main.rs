@@ -71,7 +71,7 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     std::thread::scope(|s| {
         info!("ENTERING THREADS SCOPE");
 
-        s.spawn(|| {
+        let handle = s.spawn(|| {
             info!("ENTERING FIRST SCOPED THREAD");
 
             loop {
@@ -101,10 +101,10 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
             }
         });
 
-        s.spawn(|| {
+        s.spawn(move || {
             info!("ENTERING SECOND SCOPED THREAD");
 
-            loop {
+            while !handle.is_finished() {
                 info!("SECOND SCOPED THREAD HEARTBEAT");
                 std::thread::sleep(std::time::Duration::new(10, 0));
             }
