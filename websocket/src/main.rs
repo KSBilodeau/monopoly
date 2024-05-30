@@ -5,7 +5,7 @@
 
 use std::io::Read;
 use std::os::unix::net::SocketAddr;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use async_std::os::unix::net::{UnixListener, UnixStream};
 use async_std::sync::Mutex;
@@ -27,7 +27,8 @@ macro_rules! sync {
 
 pub(crate) use sync;
 
-static GAME: LazyLock<Mutex<game::Session>> = LazyLock::new(|| Mutex::new(game::Session::new()));
+static GAME: LazyLock<Arc<Mutex<game::Session>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(game::Session::new())));
 
 async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     let mut rand_file = std::fs::File::open("/dev/random")?;
@@ -63,53 +64,62 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         return Ok(());
     };
 
-    let (mut sender, mut receiver) = server.into_builder().finish();
+    let (sender, receiver) = server.into_builder().finish();
+    let (sender, receiver) = (Arc::new(Mutex::new(sender)), Arc::new(Mutex::new(receiver)));
 
     let mut data = Vec::new();
     let mut comm_handler = CommandHandler::new(ws_id);
 
-    std::thread::scope(|s| {
-        info!("ENTERING THREADS SCOPE");
+    let (send1, recv) = (sender.clone(), receiver.clone());
+    let game = GAME.clone();
+    let first_handle = std::thread::spawn(move || {
+        info!("ENTERING FIRST SCOPED THREAD");
 
-        let handle = s.spawn(|| {
-            info!("ENTERING FIRST SCOPED THREAD");
+        loop {
+            let Ok(data_type) = sync!(recv.lock().await.receive_data(&mut data)) else {
+                error!("Receiver closed prematurely on WS (#{})", ws_id);
+                break;
+            };
 
-            loop {
-                let Ok(data_type) = sync!(receiver.receive_data(&mut data)) else {
-                    error!("Receiver closed prematurely on WS (#{})", ws_id);
-                    break;
+            if data_type.is_text() {
+                let Ok(data) = std::str::from_utf8(&data) else {
+                    error!("Received invalid UTF-8 bytes on WS (#{})", ws_id);
+                    continue;
                 };
 
-                if data_type.is_text() {
-                    let Ok(data) = std::str::from_utf8(&data) else {
-                        error!("Received invalid UTF-8 bytes on WS (#{})", ws_id);
-                        continue;
-                    };
+                info!("Received data frame: {:?} \"{}\"", data_type, data);
 
-                    info!("Received data frame: {:?} \"{}\"", data_type, data);
+                {
+                    let game = &mut *sync!(game.lock());
 
                     {
-                        let game = &mut *sync!(GAME.lock());
-
-                        sync!(comm_handler.execute_command(data, game, &mut sender));
-
-                        info!("Game state: {:#?}", game);
+                        sync!(comm_handler.execute_command(
+                                data,
+                                game,
+                                &mut *send1.lock().await
+                            ));
                     }
+
+                    info!("Game state: {:#?}", game);
                 }
-
-                data.clear();
             }
-        });
 
-        s.spawn(move || {
-            info!("ENTERING SECOND SCOPED THREAD");
-
-            while !handle.is_finished() {
-                info!("SECOND SCOPED THREAD HEARTBEAT");
-                std::thread::sleep(std::time::Duration::new(10, 0));
-            }
-        });
+            data.clear();
+        }
     });
+
+    let send2 = sender.clone();
+    let second_handle = std::thread::spawn(move || {
+        info!("ENTERING SECOND SCOPED THREAD");
+
+        while !first_handle.is_finished() {
+            info!("SECOND SCOPED THREAD HEARTBEAT");
+            std::thread::sleep(std::time::Duration::new(10, 0));
+            sync!(send2.lock().await.send_text("0\nTEST")).unwrap();
+        }
+    });
+
+    second_handle.join().unwrap();
 
     Ok(())
 }
