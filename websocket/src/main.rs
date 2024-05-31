@@ -8,15 +8,16 @@ use std::os::unix::net::SocketAddr;
 use std::sync::{Arc, LazyLock};
 
 use async_std::os::unix::net::{UnixListener, UnixStream};
-use async_std::sync::Mutex;
 use eyre::Result;
 use log::*;
+use parking_lot::Mutex;
 use soketto::handshake::server::Response;
 use soketto::handshake::Server;
 
-use crate::api::CommandHandler;
+use crate::front_api::CommandHandler;
 
-mod api;
+mod back_api;
+mod front_api;
 mod game;
 
 macro_rules! sync {
@@ -64,47 +65,30 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         return Ok(());
     };
 
-    let (sender, receiver) = server.into_builder().finish();
-    let (sender, receiver) = (Arc::new(Mutex::new(sender)), Arc::new(Mutex::new(receiver)));
+    let (sender, receiver) = {
+        let (send, recv) = server.into_builder().finish();
+        (Arc::new(Mutex::new(send)), Arc::new(Mutex::new(recv)))
+    };
 
-    let mut data = Vec::new();
-    let mut comm_handler = CommandHandler::new(ws_id);
+    let (event_in, _event_out) = std::sync::mpsc::channel();
 
-    let (send1, recv) = (sender.clone(), receiver.clone());
-    let game = GAME.clone();
-    let first_handle = std::thread::spawn(move || {
-        info!("ENTERING FIRST SCOPED THREAD");
+    let mut comm_handler = CommandHandler::new(
+        ws_id,
+        sender.clone(),
+        receiver.clone(),
+        GAME.clone(),
+        event_in,
+    );
 
-        loop {
-            let Ok(data_type) = sync!(recv.lock().await.receive_data(&mut data)) else {
-                error!("Receiver closed prematurely on WS (#{})", ws_id);
-                break;
-            };
+    let first_handle = std::thread::spawn(move || loop {
+        let command = comm_handler.pump_command();
 
-            if data_type.is_text() {
-                let Ok(data) = std::str::from_utf8(&data) else {
-                    error!("Received invalid UTF-8 bytes on WS (#{})", ws_id);
-                    continue;
-                };
+        if let Some(command) = command {
+            comm_handler.execute_command(&command);
+        }
 
-                info!("Received data frame: {:?} \"{}\"", data_type, data);
-
-                {
-                    let game = &mut *sync!(game.lock());
-
-                    {
-                        sync!(comm_handler.execute_command(
-                                data,
-                                game,
-                                &mut *send1.lock().await
-                            ));
-                    }
-
-                    info!("Game state: {:#?}", game);
-                }
-            }
-
-            data.clear();
+        if comm_handler.is_kill() {
+            break;
         }
     });
 
@@ -115,7 +99,7 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         while !first_handle.is_finished() {
             info!("SECOND SCOPED THREAD HEARTBEAT");
             std::thread::sleep(std::time::Duration::new(10, 0));
-            sync!(send2.lock().await.send_text("0\nTEST")).unwrap();
+            sync!(send2.lock().send_text("0\nTEST")).unwrap();
         }
     });
 

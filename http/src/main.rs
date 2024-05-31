@@ -1,10 +1,10 @@
 #![warn(clippy::pedantic)]
 #![deny(rust_2018_idioms)]
 
-use async_std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::process::Command;
 
+use async_std::os::unix::net::UnixListener;
 use async_std::prelude::FutureExt;
 use eyre::Result;
 use log::LevelFilter;

@@ -1,10 +1,17 @@
 use eyre::{bail, Result};
 
+#[derive(Debug, Clone)]
+pub struct Player {
+    id: usize,
+    username: String,
+}
+
 #[derive(Debug)]
 pub struct Session {
     host: Option<String>,
-    players: Vec<String>,
+    players: Vec<Player>,
     host_key: String,
+    chat: Vec<String>,
 }
 
 impl Session {
@@ -13,12 +20,13 @@ impl Session {
             host: None,
             players: vec![],
             host_key: std::env::var("MONOPOLY_HOST_KEY").unwrap(),
+            chat: vec![],
         }
     }
 
     pub fn add_player(&mut self, username: &String, host_key: &Option<String>) -> Result<()> {
         for player in &self.players {
-            if player == username {
+            if &player.username == username {
                 bail!("2");
             }
         }
@@ -33,12 +41,15 @@ impl Session {
             }
         }
 
-        self.players.push(username.clone());
+        self.players.push(Player {
+            id: self.players.len(),
+            username: username.clone(),
+        });
 
         Ok(())
     }
 
-    pub fn players(&self) -> &Vec<String> {
+    pub fn players(&self) -> &Vec<Player> {
         &self.players
     }
 }

@@ -1,48 +1,84 @@
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use async_std::io::{ReadExt, WriteExt};
 use async_std::os::unix::net::UnixStream;
 use log::{error, info};
-use soketto::Sender;
+use parking_lot::Mutex;
+use soketto::{Receiver, Sender};
 
-use crate::game::Session;
+use crate::back_api::Event;
+use crate::game::{Player, Session};
 
 #[derive(Eq, PartialEq)]
 enum CommandState {
     ExpectInit,
     Initialized,
+    Kill,
 }
 
 pub struct CommandHandler {
-    _ws_id: u32,
+    ws_id: u32,
     state: CommandState,
+    send: Arc<Mutex<Sender<UnixStream>>>,
+    recv: Arc<Mutex<Receiver<UnixStream>>>,
+    game: Arc<Mutex<Session>>,
+    data: Vec<u8>,
+    events: std::sync::mpsc::Sender<Event>,
 }
 
 impl CommandHandler {
-    pub fn new(_ws_id: u32) -> Self {
+    pub fn new(
+        ws_id: u32,
+        send: Arc<Mutex<Sender<UnixStream>>>,
+        recv: Arc<Mutex<Receiver<UnixStream>>>,
+        game: Arc<Mutex<Session>>,
+        events: std::sync::mpsc::Sender<Event>,
+    ) -> Self {
         CommandHandler {
-            _ws_id,
+            ws_id,
             state: CommandState::ExpectInit,
+            send,
+            recv,
+            game,
+            data: vec![],
+            events
         }
     }
 
-    pub async fn execute_command(
-        &mut self,
-        data: &str,
-        game: &mut Session,
-        sender: &mut Sender<UnixStream>,
-    ) {
+    pub fn pump_command<'a>(&mut self) -> Option<String> {
+        let Ok(data_type) = crate::sync!(self.recv.lock().receive_data(&mut self.data)) else {
+            error!("Receiver closed prematurely on WS (#{})", self.ws_id);
+            self.state = CommandState::Kill;
+            return None;
+        };
+
+        if data_type.is_text() {
+            let Ok(data) = std::str::from_utf8(&self.data).map(str::to_string) else {
+                error!("Received invalid UTF-8 bytes on WS (#{})", self.ws_id);
+                return None;
+            };
+
+            Some(data)
+        } else {
+            None
+        }
+    }
+
+    pub fn execute_command(&mut self, data: &str) {
         let command = Command::new(data);
 
         if ((self.state == CommandState::ExpectInit) != command.is_init()) && !command.is_error() {
             Error::new(&command.nonce(), "8".into())
-                .execute(game)
-                .respond(sender);
+                .execute(&mut *self.game.lock())
+                .respond(&mut *self.send.lock());
 
             return;
         }
 
-        let command = command.execute(game).respond(sender);
+        let command = command
+            .execute(&mut *self.game.lock())
+            .respond(&mut *self.send.lock());
 
         if command.is_error() {
             error!(
@@ -61,6 +97,10 @@ impl CommandHandler {
                 self.state = CommandState::Initialized;
             }
         }
+    }
+
+    pub fn is_kill(&self) -> bool {
+        self.state == CommandState::Kill
     }
 }
 
@@ -111,7 +151,7 @@ pub struct Init {
     nonce: String,
     username: String,
     host_key: Option<String>,
-    players: Vec<String>,
+    players: Vec<Player>,
 }
 
 impl Init {
