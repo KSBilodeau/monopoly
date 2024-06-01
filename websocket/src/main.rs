@@ -7,6 +7,7 @@ use std::io::Read;
 use std::os::unix::net::SocketAddr;
 use std::sync::{Arc, LazyLock};
 
+use crate::api::back::EventHandler;
 use async_std::os::unix::net::{UnixListener, UnixStream};
 use eyre::Result;
 use log::*;
@@ -14,19 +15,11 @@ use parking_lot::Mutex;
 use soketto::handshake::server::Response;
 use soketto::handshake::Server;
 
-use crate::front_api::CommandHandler;
+use crate::api::front::CommandHandler;
 
-mod back_api;
-mod front_api;
+mod api;
 mod game;
-
-macro_rules! sync {
-    ($future: expr) => {
-        async_std::task::block_on(async { $future.await })
-    };
-}
-
-pub(crate) use sync;
+mod util;
 
 static GAME: LazyLock<Arc<Mutex<game::Session>>> =
     LazyLock::new(|| Arc::new(Mutex::new(game::Session::new())));
@@ -70,40 +63,44 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         (Arc::new(Mutex::new(send)), Arc::new(Mutex::new(recv)))
     };
 
-    let (event_in, _event_out) = std::sync::mpsc::channel();
+    let (send, recv) = std::sync::mpsc::channel();
 
-    let mut comm_handler = CommandHandler::new(
-        ws_id,
-        sender.clone(),
-        receiver.clone(),
-        GAME.clone(),
-        event_in,
-    );
+    let mut comm_handler = CommandHandler::new(ws_id, send, GAME.clone());
+    let mut event_handler = EventHandler::new(ws_id, recv, GAME.clone());
 
-    let first_handle = std::thread::spawn(move || loop {
-        let command = comm_handler.pump_command();
+    std::thread::scope(|s| {
+        let send1 = sender.clone();
+        s.spawn(move || {
+            let sender = send1.clone();
+            loop {
+                let command = comm_handler.pump_command(receiver.clone());
 
-        if let Some(command) = command {
-            comm_handler.execute_command(&command);
-        }
+                if let Some(command) = command {
+                    comm_handler.execute_command(&command, sender.clone());
+                }
 
-        if comm_handler.is_kill() {
-            break;
-        }
+                if comm_handler.is_kill() {
+                    break;
+                }
+            }
+        });
+
+        let send2 = sender.clone();
+        s.spawn(move || {
+            let sender = send2.clone();
+            loop {
+                let event = event_handler.pump_event();
+
+                if let Some(event) = event {
+                    event_handler.execute_event(event, sender.clone());
+                }
+
+                if event_handler.is_kill() {
+                    break;
+                }
+            }
+        });
     });
-
-    let send2 = sender.clone();
-    let second_handle = std::thread::spawn(move || {
-        info!("ENTERING SECOND SCOPED THREAD");
-
-        while !first_handle.is_finished() {
-            info!("SECOND SCOPED THREAD HEARTBEAT");
-            std::thread::sleep(std::time::Duration::new(10, 0));
-            sync!(send2.lock().send_text("0\nTEST")).unwrap();
-        }
-    });
-
-    second_handle.join().unwrap();
 
     Ok(())
 }
