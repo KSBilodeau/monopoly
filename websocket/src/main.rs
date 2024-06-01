@@ -69,8 +69,9 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     // };
 
     let (mut sender, _) = server.into_builder().finish();
+    let sender = Arc::new(Mutex::new(sender));
 
-    util::sync!(sender.send_text("CONNECTED")).unwrap();
+    util::sync!(sender.lock().send_text("CONNECTED")).unwrap();
 
     // let (send, recv) = std::sync::mpsc::channel();
     //
