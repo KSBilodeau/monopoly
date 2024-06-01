@@ -7,6 +7,7 @@
 use std::io::Read;
 use std::os::unix::net::SocketAddr;
 use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 
 use async_std::os::unix::net::{UnixListener, UnixStream};
 use eyre::Result;
@@ -145,7 +146,8 @@ async fn test_serve_websocket(stream: UnixStream, addr: SocketAddr) {
     let (mut send, _) = server.into_builder().finish();
 
     loop {
-        send.send_text(format!("{}", ws_id)).await.unwrap()
+        send.send_text(format!("{}", ws_id)).await.unwrap();
+        async_std::task::sleep(Duration::new(10, 0)).await;
     }
 }
 
