@@ -70,8 +70,11 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
 
     std::thread::scope(|s| {
         let send1 = sender.clone();
+        let recv1 = receiver.clone();
         s.spawn(move || {
             let sender = send1.clone();
+            let receiver = recv1.clone();
+
             loop {
                 let command = comm_handler.pump_command(receiver.clone());
 
