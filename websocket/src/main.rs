@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 #![allow(unused_mut)]
 #![allow(unused_variables)]
+#![allow(unused_imports)]
 #![deny(rust_2018_idioms)]
 
 use std::io::Read;
@@ -15,8 +16,8 @@ use async_std::os::unix::net::{UnixListener, UnixStream};
 use eyre::Result;
 use log::*;
 use parking_lot::Mutex;
-use soketto::handshake::server::Response;
 use soketto::handshake::Server;
+use soketto::handshake::server::Response;
 
 use crate::api::back::EventHandler;
 use crate::api::front::CommandHandler;
