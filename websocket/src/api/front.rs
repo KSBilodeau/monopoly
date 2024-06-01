@@ -66,6 +66,8 @@ impl CommandHandler {
     ) -> Box<dyn CommandExt> {
         let command = Command::new(data, self.player_id);
 
+        info!("PROCESSING: {:#?}", command);
+
         if ((self.state == CommandState::AwaitingInit) != command.is_init()) && !command.is_error()
         {
             return Error::new(&command.nonce(), "8".into())
