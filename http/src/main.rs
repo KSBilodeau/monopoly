@@ -31,7 +31,10 @@ async fn create_game(_: Request<()>) -> tide::Result {
     }
 
     Command::new(std::env::var("MONOPOLY_GAME_BIN_PATH").unwrap())
-        .env("MONOPOLY_CHOWN_ID", std::env::var("MONOPOLY_CHOWN_ID").unwrap())
+        .env(
+            "MONOPOLY_CHOWN_ID",
+            std::env::var("MONOPOLY_CHOWN_ID").unwrap(),
+        )
         .env("MONOPOLY_GAME_PATH", &game_code)
         .env("MONOPOLY_HOST_KEY", &host_key)
         .spawn()?;

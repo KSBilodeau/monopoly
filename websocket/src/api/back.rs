@@ -92,16 +92,14 @@ impl Message {
 }
 
 impl EventExt for Message {
-    fn execute(mut self: Box<Self>, _: Arc<Mutex<Session>>) -> Box<dyn EventExt> {
+    fn execute(self: Box<Self>, _: Arc<Mutex<Session>>) -> Box<dyn EventExt> {
         self
     }
 
     fn respond(self: Box<Self>, send: Arc<Mutex<Sender<UnixStream>>>) -> Box<dyn EventExt> {
-        util::sync!(send.lock().send_text(format!(
-            "0\nCHAT\n{}\n{}",
-            self.username,
-            self.msg
-        )))
+        util::sync!(send
+            .lock()
+            .send_text(format!("0\nCHAT\n{}\n{}", self.username, self.msg)))
         .unwrap();
 
         self

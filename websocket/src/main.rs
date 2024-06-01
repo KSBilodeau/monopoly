@@ -1,13 +1,13 @@
 #![feature(lazy_cell)]
 #![feature(concat_bytes)]
 #![warn(clippy::pedantic)]
+#![allow(dead_code)]
 #![deny(rust_2018_idioms)]
 
 use std::io::Read;
 use std::os::unix::net::SocketAddr;
 use std::sync::{Arc, LazyLock};
 
-use crate::api::back::EventHandler;
 use async_std::os::unix::net::{UnixListener, UnixStream};
 use eyre::Result;
 use log::*;
@@ -15,6 +15,7 @@ use parking_lot::Mutex;
 use soketto::handshake::server::Response;
 use soketto::handshake::Server;
 
+use crate::api::back::EventHandler;
 use crate::api::front::CommandHandler;
 
 mod api;
@@ -24,7 +25,7 @@ mod util;
 static GAME: LazyLock<Arc<Mutex<game::Session>>> =
     LazyLock::new(|| Arc::new(Mutex::new(game::Session::new())));
 
-async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
+async fn _serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     let mut rand_file = std::fs::File::open("/dev/random")?;
     let mut buf = [0u8; 4];
     rand_file.read_exact(&mut buf)?;
@@ -107,6 +108,47 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     Ok(())
 }
 
+async fn test_serve_websocket(stream: UnixStream, addr: SocketAddr) {
+    let mut rand_file = std::fs::File::open("/dev/random").unwrap();
+    let mut buf = [0u8; 4];
+    rand_file.read_exact(&mut buf).unwrap();
+
+    let ws_id = u32::from_be_bytes(buf);
+
+    info!(
+        "Serving WS connection (ID #: {}) on {:?}",
+        ws_id,
+        addr.as_pathname()
+    );
+
+    let mut server = Server::new(stream);
+
+    let websocket_key = {
+        let Ok(req) = server.receive_request().await else {
+            error!("Failed to receive connection request for WS (#{})", ws_id);
+            return;
+        };
+        info!("Received request for path: {}", req.path());
+        req.key()
+    };
+
+    let accept = Response::Accept {
+        key: websocket_key,
+        protocol: None,
+    };
+
+    let Ok(_) = server.send_response(&accept).await else {
+        error!("Failed to accept WS (#{}) connection", ws_id);
+        return;
+    };
+
+    let (mut send, _) = server.into_builder().finish();
+
+    loop {
+        send.send_text(format!("{}", ws_id)).await.unwrap()
+    }
+}
+
 fn main() -> Result<()> {
     simple_logger::SimpleLogger::new()
         .with_level(LevelFilter::Debug)
@@ -134,7 +176,7 @@ fn main() -> Result<()> {
         std::os::unix::fs::chown(sock_addr, Some(33), Some(33))?;
 
         while let Ok((stream, addr)) = server.accept().await {
-            async_std::task::spawn(serve_websocket(stream, addr));
+            async_std::task::spawn(test_serve_websocket(stream, addr));
         }
 
         Ok(())
