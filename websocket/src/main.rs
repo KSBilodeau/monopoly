@@ -62,54 +62,56 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         return Ok(());
     };
 
-    let (sender, receiver) = {
-        let (send, recv) = server.into_builder().finish();
-        (Arc::new(Mutex::new(send)), Arc::new(Mutex::new(recv)))
-    };
+    // let (sender, receiver) = {
+    //     let (send, recv) = server.into_builder().finish();
+    //     (Arc::new(Mutex::new(send)), Arc::new(Mutex::new(recv)))
+    // };
 
-    util::sync!(sender.lock().send_text("CONNECTED")).unwrap();
+    let (mut sender, _) = server.into_builder().finish();
 
-    let (send, recv) = std::sync::mpsc::channel();
+    util::sync!(sender.send_text("CONNECTED")).unwrap();
 
-    let mut comm_handler = CommandHandler::new(ws_id, send, GAME.clone());
-    let mut event_handler = EventHandler::new(ws_id, recv, GAME.clone());
-
-    std::thread::scope(|s| {
-        let send1 = sender.clone();
-        let recv1 = receiver.clone();
-        s.spawn(move || {
-            let sender = send1.clone();
-            let receiver = recv1.clone();
-
-            loop {
-                // let command = comm_handler.pump_command(receiver.clone());
-                //
-                // if let Some(command) = command {
-                //     comm_handler.execute_command(&command, sender.clone());
-                // }
-                //
-                // if comm_handler.is_kill() {
-                //     break;
-                // }
-            }
-        });
-
-        let send2 = sender.clone();
-        s.spawn(move || {
-            let sender = send2.clone();
-            loop {
-                // let event = event_handler.pump_event();
-                //
-                // if let Some(event) = event {
-                //     event_handler.execute_event(event, sender.clone());
-                // }
-                //
-                // if event_handler.is_kill() {
-                //     break;
-                // }
-            }
-        });
-    });
+    // let (send, recv) = std::sync::mpsc::channel();
+    //
+    // let mut comm_handler = CommandHandler::new(ws_id, send, GAME.clone());
+    // let mut event_handler = EventHandler::new(ws_id, recv, GAME.clone());
+    //
+    // std::thread::scope(|s| {
+    //     let send1 = sender.clone();
+    //     let recv1 = receiver.clone();
+    //     s.spawn(move || {
+    //         let sender = send1.clone();
+    //         let receiver = recv1.clone();
+    //
+    //         loop {
+    //             // let command = comm_handler.pump_command(receiver.clone());
+    //             //
+    //             // if let Some(command) = command {
+    //             //     comm_handler.execute_command(&command, sender.clone());
+    //             // }
+    //             //
+    //             // if comm_handler.is_kill() {
+    //             //     break;
+    //             // }
+    //         }
+    //     });
+    //
+    //     let send2 = sender.clone();
+    //     s.spawn(move || {
+    //         let sender = send2.clone();
+    //         loop {
+    //             // let event = event_handler.pump_event();
+    //             //
+    //             // if let Some(event) = event {
+    //             //     event_handler.execute_event(event, sender.clone());
+    //             // }
+    //             //
+    //             // if event_handler.is_kill() {
+    //             //     break;
+    //             // }
+    //         }
+    //     });
+    // });
 
     Ok(())
 }
