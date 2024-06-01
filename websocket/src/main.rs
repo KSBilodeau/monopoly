@@ -2,6 +2,8 @@
 #![feature(concat_bytes)]
 #![warn(clippy::pedantic)]
 #![allow(dead_code)]
+#![allow(unused_mut)]
+#![allow(unused_variables)]
 #![deny(rust_2018_idioms)]
 
 use std::io::Read;
@@ -26,7 +28,7 @@ mod util;
 static GAME: LazyLock<Arc<Mutex<game::Session>>> =
     LazyLock::new(|| Arc::new(Mutex::new(game::Session::new())));
 
-async fn _serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
+async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     let mut rand_file = std::fs::File::open("/dev/random")?;
     let mut buf = [0u8; 4];
     rand_file.read_exact(&mut buf)?;
@@ -65,6 +67,8 @@ async fn _serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         (Arc::new(Mutex::new(send)), Arc::new(Mutex::new(recv)))
     };
 
+    util::sync!(sender.lock().send_text("CONNECTED")).unwrap();
+
     let (send, recv) = std::sync::mpsc::channel();
 
     let mut comm_handler = CommandHandler::new(ws_id, send, GAME.clone());
@@ -76,16 +80,17 @@ async fn _serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         s.spawn(move || {
             let sender = send1.clone();
             let receiver = recv1.clone();
+
             loop {
-                let command = comm_handler.pump_command(receiver.clone());
-
-                if let Some(command) = command {
-                    comm_handler.execute_command(&command, sender.clone());
-                }
-
-                if comm_handler.is_kill() {
-                    break;
-                }
+                // let command = comm_handler.pump_command(receiver.clone());
+                //
+                // if let Some(command) = command {
+                //     comm_handler.execute_command(&command, sender.clone());
+                // }
+                //
+                // if comm_handler.is_kill() {
+                //     break;
+                // }
             }
         });
 
@@ -93,15 +98,15 @@ async fn _serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         s.spawn(move || {
             let sender = send2.clone();
             loop {
-                let event = event_handler.pump_event();
-
-                if let Some(event) = event {
-                    event_handler.execute_event(event, sender.clone());
-                }
-
-                if event_handler.is_kill() {
-                    break;
-                }
+                // let event = event_handler.pump_event();
+                //
+                // if let Some(event) = event {
+                //     event_handler.execute_event(event, sender.clone());
+                // }
+                //
+                // if event_handler.is_kill() {
+                //     break;
+                // }
             }
         });
     });
@@ -109,7 +114,7 @@ async fn _serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     Ok(())
 }
 
-async fn test_serve_websocket(stream: UnixStream, addr: SocketAddr) {
+async fn _test_serve_websocket(stream: UnixStream, addr: SocketAddr) {
     let mut rand_file = std::fs::File::open("/dev/random").unwrap();
     let mut buf = [0u8; 4];
     rand_file.read_exact(&mut buf).unwrap();
@@ -178,7 +183,7 @@ fn main() -> Result<()> {
         std::os::unix::fs::chown(sock_addr, Some(33), Some(33))?;
 
         while let Ok((stream, addr)) = server.accept().await {
-            async_std::task::spawn(test_serve_websocket(stream, addr));
+            async_std::task::spawn(serve_websocket(stream, addr));
         }
 
         Ok(())
