@@ -75,8 +75,6 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
             let sender = send1.clone();
             let receiver = recv1.clone();
             loop {
-                info!("RECEIVER: {:#?}", receiver);
-
                 let command = comm_handler.pump_command(receiver.clone());
 
                 if let Some(command) = command {

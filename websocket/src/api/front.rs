@@ -53,8 +53,10 @@ impl CommandHandler {
                 return None;
             };
 
+            self.data.clear();
             Some(data)
         } else {
+            self.data.clear();
             None
         }
     }
