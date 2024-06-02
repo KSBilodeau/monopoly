@@ -4,8 +4,10 @@
 
 use std::io::Read;
 use std::os::unix::net::SocketAddr;
+use std::sync::Arc;
 
 use async_std::os::unix::net::{UnixListener, UnixStream};
+use async_std::sync::Mutex;
 use eyre::Result;
 use log::*;
 use soketto::handshake::server::Response;
@@ -50,19 +52,29 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         return Ok(());
     };
 
-    let (mut send, mut recv) = server.into_builder().finish();
+    let (send, recv) = {
+        let (send, recv) = server.into_builder().finish();
+        (Arc::new(Mutex::new(send)), Arc::new(Mutex::new(recv)))
+    };
 
-    loop {
-        let mut data = vec![];
-        let data_type = recv.receive_data(&mut data).await?;
+    let sock_handler = api::SocketHandler::new(ws_id, send, recv);
 
-        if data_type.is_text() {
-            send.send_text(String::from_utf8_lossy(&data).to_string())
-                .await?;
+    let mut comm_handler = sock_handler.comm_handler();
+    async_std::task::spawn(async move {
+        loop {
+            let command = comm_handler.pump().await;
+
+            if let Some(command) = command {
+                comm_handler.execute(&command).await;
+            }
+
+            if comm_handler.is_killed() {
+                break;
+            }
         }
+    });
 
-        data.clear();
-    }
+    Ok(())
 }
 
 fn main() -> Result<()> {
