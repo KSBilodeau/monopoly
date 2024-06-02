@@ -55,7 +55,7 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
     let (send, recv) = server.into_builder().finish();
 
     let mut comm_handler = CommandHandler::new(ws_id, send, recv);
-    async_std::task::spawn(async move {
+    let comm = async_std::task::spawn(async move {
         loop {
             let command = comm_handler.pump().await;
 
@@ -68,6 +68,8 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
             }
         }
     });
+
+    comm.await;
 
     Ok(())
 }
