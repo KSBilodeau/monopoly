@@ -1,23 +1,18 @@
 #![feature(lazy_cell)]
 #![feature(concat_bytes)]
 #![warn(clippy::pedantic)]
-#![allow(dead_code)]
-#![allow(unused_mut)]
-#![allow(unused_variables)]
-#![allow(unused_imports)]
 #![deny(rust_2018_idioms)]
 
 use std::io::Read;
 use std::os::unix::net::SocketAddr;
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
 
 use async_std::os::unix::net::{UnixListener, UnixStream};
 use eyre::Result;
 use log::*;
 use parking_lot::Mutex;
-use soketto::handshake::Server;
 use soketto::handshake::server::Response;
+use soketto::handshake::Server;
 
 use crate::api::back::EventHandler;
 use crate::api::front::CommandHandler;
@@ -63,106 +58,56 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         return Ok(());
     };
 
-    dbg!("a");
     let (sender, receiver) = {
-        dbg!("b");
         let (send, recv) = server.into_builder().finish();
-        dbg!("c");
         (Arc::new(Mutex::new(send)), Arc::new(Mutex::new(recv)))
     };
-    dbg!("d");
-
-    // let (mut sender, receiver) = server.into_builder().finish();
-    // let sender = Arc::new(Mutex::new(sender));
-    // let receiver = Arc::new(Mutex::new(receiver));
 
     util::sync!(sender.lock().send_text("CONNECTED")).unwrap();
 
-    // let (send, recv) = std::sync::mpsc::channel();
-    //
-    // let mut comm_handler = CommandHandler::new(ws_id, send, GAME.clone());
-    // let mut event_handler = EventHandler::new(ws_id, recv, GAME.clone());
-    //
-    // std::thread::scope(|s| {
-    //     let send1 = sender.clone();
-    //     let recv1 = receiver.clone();
-    //     s.spawn(move || {
-    //         let sender = send1.clone();
-    //         let receiver = recv1.clone();
-    //
-    //         loop {
-    //             // let command = comm_handler.pump_command(receiver.clone());
-    //             //
-    //             // if let Some(command) = command {
-    //             //     comm_handler.execute_command(&command, sender.clone());
-    //             // }
-    //             //
-    //             // if comm_handler.is_kill() {
-    //             //     break;
-    //             // }
-    //         }
-    //     });
-    //
-    //     let send2 = sender.clone();
-    //     s.spawn(move || {
-    //         let sender = send2.clone();
-    //         loop {
-    //             // let event = event_handler.pump_event();
-    //             //
-    //             // if let Some(event) = event {
-    //             //     event_handler.execute_event(event, sender.clone());
-    //             // }
-    //             //
-    //             // if event_handler.is_kill() {
-    //             //     break;
-    //             // }
-    //         }
-    //     });
-    // });
+    let (send, recv) = std::sync::mpsc::channel();
+
+    let mut comm_handler = CommandHandler::new(ws_id, send, GAME.clone());
+    let mut event_handler = EventHandler::new(ws_id, recv, GAME.clone());
+
+    std::thread::scope(|s| {
+        let send1 = sender.clone();
+        let recv1 = receiver.clone();
+        s.spawn(move || {
+            let sender = send1.clone();
+            let receiver = recv1.clone();
+
+            loop {
+                let command = comm_handler.pump_command(receiver.clone());
+
+                if let Some(command) = command {
+                    comm_handler.execute_command(&command, sender.clone());
+                }
+
+                if comm_handler.is_kill() {
+                    break;
+                }
+            }
+        });
+
+        let send2 = sender.clone();
+        s.spawn(move || {
+            let sender = send2.clone();
+            loop {
+                let event = event_handler.pump_event();
+
+                if let Some(event) = event {
+                    event_handler.execute_event(event, sender.clone());
+                }
+
+                if event_handler.is_kill() {
+                    break;
+                }
+            }
+        });
+    });
 
     Ok(())
-}
-
-async fn _test_serve_websocket(stream: UnixStream, addr: SocketAddr) {
-    let mut rand_file = std::fs::File::open("/dev/random").unwrap();
-    let mut buf = [0u8; 4];
-    rand_file.read_exact(&mut buf).unwrap();
-
-    let ws_id = u32::from_be_bytes(buf);
-
-    info!(
-        "Serving WS connection (ID #: {}) on {:?}",
-        ws_id,
-        addr.as_pathname()
-    );
-
-    let mut server = Server::new(stream);
-
-    let websocket_key = {
-        let Ok(req) = server.receive_request().await else {
-            error!("Failed to receive connection request for WS (#{})", ws_id);
-            return;
-        };
-        info!("Received request for path: {}", req.path());
-        req.key()
-    };
-
-    let accept = Response::Accept {
-        key: websocket_key,
-        protocol: None,
-    };
-
-    let Ok(_) = server.send_response(&accept).await else {
-        error!("Failed to accept WS (#{}) connection", ws_id);
-        return;
-    };
-
-    let (mut send, _) = server.into_builder().finish();
-
-    loop {
-        send.send_text(format!("{}", ws_id)).await.unwrap();
-        async_std::task::sleep(Duration::new(10, 0)).await;
-    }
 }
 
 fn main() -> Result<()> {
