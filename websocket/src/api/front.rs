@@ -1,10 +1,8 @@
-use async_std::io::{ReadExt, WriteExt};
 use std::any::Any;
 use std::fmt::Debug;
-use std::sync::Arc;
 
+use async_std::io::{ReadExt, WriteExt};
 use async_std::os::unix::net::UnixStream;
-use async_std::sync::Mutex;
 use async_trait::async_trait;
 use eyre::Result;
 use soketto::{Receiver, Sender};
@@ -20,16 +18,12 @@ pub struct CommandHandler {
     ws_id: u32,
     player_id: Option<usize>,
     state: State,
-    send: Arc<Mutex<Sender<UnixStream>>>,
-    recv: Arc<Mutex<Receiver<UnixStream>>>,
+    send: Sender<UnixStream>,
+    recv: Receiver<UnixStream>,
 }
 
 impl CommandHandler {
-    pub fn new(
-        ws_id: u32,
-        send: Arc<Mutex<Sender<UnixStream>>>,
-        recv: Arc<Mutex<Receiver<UnixStream>>>,
-    ) -> Self {
+    pub fn new(ws_id: u32, send: Sender<UnixStream>, recv: Receiver<UnixStream>) -> Self {
         Self {
             ws_id,
             player_id: None,
@@ -42,7 +36,7 @@ impl CommandHandler {
     pub async fn pump(&mut self) -> Option<String> {
         let mut data = vec![];
 
-        let Ok(data_type) = self.recv.lock().await.receive_data(&mut data).await else {
+        let Ok(data_type) = self.recv.receive_data(&mut data).await else {
             self.state = State::Killed;
             return None;
         };
@@ -64,7 +58,7 @@ impl CommandHandler {
 
         log::info!("PROCESSING: {:#?}", command);
 
-        let Ok(command) = command.execute(&mut *self.send.lock().await).await else {
+        let Ok(command) = command.execute(&mut self.send).await else {
             log::error!("Sender/Receiver closed prematurely");
             self.state = State::Killed;
             return;
@@ -92,7 +86,10 @@ impl CommandHandler {
 
 #[async_trait]
 pub(super) trait CommandExt: Debug + Send {
-    async fn execute(self: Box<Self>, sender: &mut Sender<UnixStream>) -> Result<Box<dyn CommandExt>>;
+    async fn execute(
+        self: Box<Self>,
+        sender: &mut Sender<UnixStream>,
+    ) -> Result<Box<dyn CommandExt>>;
 
     fn nonce(&self) -> &str;
 

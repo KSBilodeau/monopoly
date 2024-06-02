@@ -4,14 +4,14 @@
 
 use std::io::Read;
 use std::os::unix::net::SocketAddr;
-use std::sync::Arc;
 
 use async_std::os::unix::net::{UnixListener, UnixStream};
-use async_std::sync::Mutex;
 use eyre::Result;
 use log::*;
 use soketto::handshake::server::Response;
 use soketto::handshake::Server;
+
+use crate::api::front::CommandHandler;
 
 mod api;
 mod game;
@@ -52,14 +52,9 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         return Ok(());
     };
 
-    let (send, recv) = {
-        let (send, recv) = server.into_builder().finish();
-        (Arc::new(Mutex::new(send)), Arc::new(Mutex::new(recv)))
-    };
+    let (send, recv) = server.into_builder().finish();
 
-    let sock_handler = api::SocketHandler::new(ws_id, send, recv);
-
-    let mut comm_handler = sock_handler.comm_handler();
+    let mut comm_handler = CommandHandler::new(ws_id, send, recv);
     async_std::task::spawn(async move {
         loop {
             let command = comm_handler.pump().await;
