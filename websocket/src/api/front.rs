@@ -3,9 +3,18 @@ use std::fmt::Debug;
 
 use async_std::io::{ReadExt, WriteExt};
 use async_std::os::unix::net::UnixStream;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use eyre::Result;
 use soketto::{Receiver, Sender};
+
+type SafeSender<T> = Arc<Mutex<Sender<T>>>;
+
+macro_rules! unlock_mut {
+    ($lock: expr) => {
+        &mut *$lock.lock().await
+    };
+}
 
 #[derive(Debug, Eq, PartialEq)]
 enum State {
@@ -18,25 +27,25 @@ pub struct CommandHandler {
     ws_id: u32,
     player_id: Option<usize>,
     state: State,
-    send: Sender<UnixStream>,
-    recv: Receiver<UnixStream>,
+    ws_send: SafeSender<UnixStream>,
+    ws_recv: Receiver<UnixStream>,
 }
 
 impl CommandHandler {
-    pub fn new(ws_id: u32, send: Sender<UnixStream>, recv: Receiver<UnixStream>) -> Self {
+    pub fn new(ws_id: u32, send: SafeSender<UnixStream>, recv: Receiver<UnixStream>) -> Self {
         Self {
             ws_id,
             player_id: None,
             state: State::Uninit,
-            send,
-            recv,
+            ws_send: send,
+            ws_recv: recv,
         }
     }
 
     pub async fn pump(&mut self) -> Option<String> {
         let mut data = vec![];
 
-        let Ok(data_type) = self.recv.receive_data(&mut data).await else {
+        let Ok(data_type) = self.ws_recv.receive_data(&mut data).await else {
             self.state = State::Killed;
             return None;
         };
@@ -58,7 +67,7 @@ impl CommandHandler {
 
         log::info!("PROCESSING: {:#?}", command);
 
-        let Ok(command) = command.execute(&mut self.send).await else {
+        let Ok(command) = command.execute(unlock_mut!(self.ws_send)).await else {
             log::error!("Sender/Receiver closed prematurely");
             self.state = State::Killed;
             return;

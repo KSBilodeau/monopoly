@@ -6,6 +6,7 @@ use std::io::Read;
 use std::os::unix::net::SocketAddr;
 
 use async_std::os::unix::net::{UnixListener, UnixStream};
+use async_std::sync::{Arc, Mutex};
 use eyre::Result;
 use log::*;
 use soketto::handshake::server::Response;
@@ -52,7 +53,11 @@ async fn serve_websocket(stream: UnixStream, addr: SocketAddr) -> Result<()> {
         return Ok(());
     };
 
-    let (send, recv) = server.into_builder().finish();
+    let (send, recv) = {
+        let (send, recv) = server.into_builder().finish();
+
+        (Arc::new(Mutex::new(send)), recv)
+    };
 
     let mut comm_handler = CommandHandler::new(ws_id, send, recv);
     let comm = async_std::task::spawn(async move {
