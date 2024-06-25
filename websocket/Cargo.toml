@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 async-std = "1.12.0"
 async-trait = "0.1.80"
-parking_lot = "0.12.3"
 soketto = { version = "0.8.0", default-features = false }
 eyre = "0.6.12"
 log = "0.4.21"
